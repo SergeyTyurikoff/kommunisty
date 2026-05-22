@@ -133,24 +133,39 @@ KP.World = class World {
   draw(ctx,cameraX,cameraY,W,H,assets){
     this.drawBg(ctx,cameraX,cameraY,W,H,assets);
 
-    // Platforms
+    // Platforms — neutral stone/dirt, subtle biome tint on top strip only
     for(const p of this.platforms) if(this.visible(p,cameraX,cameraY,W,H)){
       const isSky=p.type==='sky';
+      // Stone body — dark neutral, same for all biomes
+      ctx.fillStyle=isSky?'#30303a':'#252530';
+      ctx.fillRect(p.x,p.y,p.w,p.h);
+      // Very subtle tile texture overlay (low opacity so it doesn't dominate)
       const imgId=isSky?this.skyTileId():this.groundTileId();
       if(assets&&assets.ready(imgId)){
         const img=assets.images[imgId];
         const pat=ctx.createPattern?ctx.createPattern(img,'repeat'):null;
-        ctx.fillStyle=pat||'#333';
-      } else {
-        // Visually distinct sky vs ground
-        ctx.fillStyle=isSky?this._skyColor():this._groundColor();
+        if(pat){ ctx.globalAlpha=0.14; ctx.fillStyle=pat; ctx.fillRect(p.x,p.y,p.w,p.h); ctx.globalAlpha=1; }
       }
-      ctx.fillRect(p.x,p.y,p.w,p.h);
-      // Top highlight
-      ctx.fillStyle=isSky?'rgba(255,255,255,.20)':'rgba(255,255,255,.12)';
-      ctx.fillRect(p.x,p.y,p.w,4);
-      // Bottom shadow for sky platforms
-      if(isSky){ ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(p.x,p.y+p.h-3,p.w,3); }
+      // Thin biome-tinted surface strip (top 5px)
+      const surfColor=['#3a5228','#a0b8c2','#8a6038','#2a5038','#404050','#5a2020'][this.levelIndex]||'#404040';
+      ctx.fillStyle=surfColor; ctx.fillRect(p.x,p.y,p.w,5);
+      // Top edge glint
+      ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(p.x,p.y,p.w,2);
+      // Stone texture: horizontal seam lines
+      ctx.fillStyle='rgba(0,0,0,.18)';
+      if(p.h>10) ctx.fillRect(p.x,p.y+8,p.w,1);
+      if(p.h>22) ctx.fillRect(p.x,p.y+20,p.w,1);
+      // Vertical brick joints (every 32px)
+      ctx.fillStyle='rgba(0,0,0,.12)';
+      for(let bx=p.x+16;bx<p.x+p.w-4;bx+=32) ctx.fillRect(bx,p.y+5,1,p.h-5);
+      // Bottom underside — darker "hanging" face for sky platforms
+      if(isSky){
+        ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fillRect(p.x,p.y+p.h-4,p.w,4);
+        ctx.fillStyle='rgba(0,0,0,.22)'; ctx.fillRect(p.x,p.y+p.h,p.w,6);
+      } else {
+        // Ground: dark side edges
+        ctx.fillStyle='rgba(0,0,0,.30)'; ctx.fillRect(p.x,p.y+5,4,p.h-5); ctx.fillRect(p.x+p.w-4,p.y+5,4,p.h-5);
+      }
     }
 
     // Crates
@@ -170,16 +185,14 @@ KP.World = class World {
       }
     }
 
-    // Shops
+    // Shops — always canvas (SVG asset is decorative only)
     for(const s of this.shops) if(this.visible(s,cameraX,cameraY,W,H)){
-      if(assets&&assets.drawImg(ctx,'shop',s.x-10,s.y-8,s.w+20,s.h+12,false)){}
-      else if(assets) assets.drawShop(ctx,s.x,s.y,s.w,s.h);
+      if(assets) assets.drawShop(ctx,s.x,s.y,s.w,s.h);
       else {
         ctx.fillStyle='#2b1d12'; ctx.fillRect(s.x,s.y,s.w,s.h);
         ctx.fillStyle='#ffd21c'; ctx.fillRect(s.x-10,s.y-22,s.w+20,22);
-        ctx.fillStyle='#111'; ctx.font='bold 12px Arial'; ctx.fillText('SHOP',s.x+17,s.y-7);
+        ctx.fillStyle='#111'; ctx.font='bold 12px Arial'; ctx.fillText('СНАБЖЕНЕЦ',s.x+4,s.y-7);
       }
-      ctx.fillStyle='rgba(255,210,28,.18)'; ctx.fillRect(s.x-42,s.y-8,s.w+84,s.h+16);
     }
 
     // Portal
