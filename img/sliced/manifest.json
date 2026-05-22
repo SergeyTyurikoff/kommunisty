@@ -1,0 +1,44 @@
+{
+  "weapons": [
+    "ammo_box_pistol.png",
+    "ammo_crate_rifle.png",
+    "flamethrower.png",
+    "fuel_canister.png",
+    "mosin_rifle.png",
+    "pistol.png",
+    "saber.png",
+    "shotgun.png",
+    "shotgun_shell.png",
+    "smg.png"
+  ],
+  "ui_tiles": [
+    "desert_platform.png",
+    "factory_platform.png",
+    "forest_platform.png",
+    "hp_heart.png",
+    "mold_platform.png",
+    "money_stack.png",
+    "portal_exit.png",
+    "snow_platform.png",
+    "swamp_platform.png",
+    "time_clock.png",
+    "time_stop_icon.png",
+    "ui_minimap.png"
+  ],
+  "bosses": [
+    "lenin_boss.png",
+    "mech_tank_boss.png",
+    "mushroom_boss.png",
+    "sandworm_boss.png",
+    "swamp_boss.png",
+    "tree_boss.png"
+  ],
+  "units": [
+    "cavalry_enemy.png",
+    "hero_revolutionary.png",
+    "mold_gunner.png",
+    "mold_officer.png",
+    "mold_zombie_light.png",
+    "tank_enemy.png"
+  ]
+}

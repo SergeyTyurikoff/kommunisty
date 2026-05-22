@@ -1,0 +1,206 @@
+'use strict';
+window.KP = window.KP || {};
+KP.World = class World {
+  constructor(levelIndex=0){
+    this.levelIndex = levelIndex;
+    this.levelW = 3200;
+    this.worldH = 700;
+    this.biomes = ['Лес','Зима','Пустыня','Болото','Город','Мавзолей'];
+    this.bgIds = ['forestBg','winterBg','desertBg','swampBg','cityBg','mausoleumBg'];
+    this.platforms=[]; this.walls=[]; this.doors=[]; this.chests=[]; this.shops=[]; this.acid=[]; this.rushTriggers=[]; this.portal=null; this.enemySpawns=[];
+    this.build();
+  }
+  get worldW(){ return this.levelW; }
+  biomeName(){ return this.biomes[this.levelIndex] || '???'; }
+  addPlatform(x,y,w,h,type='ground'){ const p={x,y,w,h,type}; this.platforms.push(p); return p; }
+
+  build(){
+    const i=this.levelIndex;
+
+    // v17: основной путь снова ровный. Подземелья и кислота убраны,
+    // потому что герой и враги слишком любили превращать их в кладбище физики.
+    const ground=this.addPlatform(0,485,this.levelW,80,'ground');
+
+    // Верхние платформы оставлены как отдельный слой.
+    // Через них можно прыгать снизу и проваливаться вниз по S/↓/Ы.
+    const sky=[];
+    for(let n=0;n<12;n++){
+      const x=170+n*230;
+      const y=390 - (n%3)*38;
+      sky.push(this.addPlatform(x,y,175,18,'sky'));
+      if(n%3===1) sky.push(this.addPlatform(x+95,y-76,155,18,'sky'));
+    }
+    const high1=this.addPlatform(700,285,240,18,'sky');
+    const high2=this.addPlatform(1550,292,255,18,'sky');
+    const high3=this.addPlatform(2380,300,240,18,'sky');
+
+    this.shops.push({x:185,y:415,w:70,h:70,name:`Снабженец: ${this.biomeName()}`});
+
+    this.chests.push({x:760,y:444,w:38,h:26,open:false,loot:i%2===0?'money':'ammo'});
+    this.chests.push({x:1320,y:444,w:38,h:26,open:false,loot:['sabre','smg','shotgun','money','ammo','flamethrower'][i] || 'money'});
+    this.chests.push({x:1980,y:444,w:38,h:26,open:false,loot:['money','ammo','sabre','smg','shotgun','money'][i] || 'money'});
+
+    // Раш теперь появляется поздно, а не сразу на старте, как налоговая тревога.
+    this.rushTriggers.push({x:2120,done:false,floorY:485});
+
+    this.portal = {x:2960,y:395,w:70,h:90,active:true};
+
+    this.buildEnemySpawns([ground, high1, high2, high3, ...sky]);
+  }
+
+  buildEnemySpawns(platforms){
+    const normalByLevel=[
+      ['zombie','runner','pistol'],
+      ['zombie','pistol','gunner'],
+      ['runner','horse','pistol'],
+      ['zombie','runner','gunner','miniboss'],
+      ['pistol','gunner','tank','miniboss'],
+      ['zombie','runner','gunner','horse','tank','miniboss']
+    ][this.levelIndex] || ['zombie'];
+
+    const add=(p,xFrac,kind,radius=125)=>{
+      const x=p.x+p.w*xFrac;
+      // Никаких врагов сразу у носа игрока.
+      if(x<620 || x>2580) return;
+      const min=KP.Utils.clamp(x-radius,p.x+8,p.x+p.w-95);
+      const max=KP.Utils.clamp(x+radius,p.x+110,p.x+p.w-8);
+      if(max-min<100) return;
+      this.enemySpawns.push({x, floorY:p.y, min, max, kind});
+    };
+
+    // Основная дорога: враги равномерно по всей локации, но не у старта и не у выхода.
+    const ground=platforms.find(p=>p.type==='ground');
+    if(ground){
+      const xs=[720,1020,1320,1620,1940,2260,2520];
+      xs.forEach((x,idx)=>{
+        const kind=normalByLevel[idx%normalByLevel.length];
+        const min=Math.max(620,x-120), max=Math.min(2650,x+120);
+        this.enemySpawns.push({x, floorY:ground.y, min, max, kind});
+      });
+    }
+
+    // Верхние платформы: по одному врагу на части платформ, без массового съезда вниз.
+    platforms.forEach((p,idx)=>{
+      if(p.type!=='sky' || p.x<620 || p.x>2550 || p.w<140) return;
+      if(idx%2===0) add(p,.5,normalByLevel[(idx+1)%normalByLevel.length],Math.min(100,p.w*.42));
+    });
+
+    const bossKind=['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'][this.levelIndex];
+    this.enemySpawns.push({x:2700, floorY:485, min:2520, max:2860, kind:bossKind});
+  }
+
+  solid(){ return [...this.platforms]; }
+
+  collide(o){
+    const prevBottom=o.y+o.h;
+    o.grounded=false;
+
+    // Боковая коллизия только с землёй. Верхние платформы не цепляют боком.
+    o.x+=o.vx;
+    const hardSolids=this.platforms.filter(p=>p.type==='ground');
+    for(const p of hardSolids) if(KP.Utils.rects(o,p)){
+      if(o.vx>0)o.x=p.x-o.w;
+      else if(o.vx<0)o.x=p.x+p.w;
+      o.vx=0;
+      if(o instanceof KP.Enemy) o.facing*=-1;
+    }
+
+    o.y+=o.vy;
+    for(const p of this.platforms) if(KP.Utils.rects(o,p)){
+      const oneWay = p.type==='sky';
+      const droppingCurrent = o instanceof KP.Player && o.dropTimer>0 && o.dropPlatform===p;
+      if(droppingCurrent) continue;
+
+      if(oneWay){
+        if(o.vy>=0 && prevBottom<=p.y+12){
+          o.y=p.y-o.h; o.grounded=true; o.vy=0; o.floorContact=p;
+        }
+        continue;
+      }
+
+      if(o.vy>0){o.y=p.y-o.h;o.grounded=true;o.floorContact=p;}
+      else if(o.vy<0)o.y=p.y+p.h;
+      o.vy=0;
+    }
+
+    if(o instanceof KP.Player && o.dropPlatform && !KP.Utils.rects(o,o.dropPlatform)){ o.dropPlatform=null; }
+
+    o.x=KP.Utils.clamp(o.x,0,this.worldW-o.w);
+    o.y=KP.Utils.clamp(o.y,0,this.worldH-o.h);
+
+    if(o instanceof KP.Enemy && o.floorY){
+      // Жёсткая страховка: враги держат свой этаж/платформу и не проваливаются вниз.
+      if(o.y > o.floorY-o.h+16 || o.y < o.floorY-o.h-90){
+        o.y=o.floorY-o.h; o.vy=0; o.grounded=true;
+      }
+      o.x=KP.Utils.clamp(o.x,o.patrolMin,Math.max(o.patrolMin,o.patrolMax-o.w));
+    }
+  }
+
+  draw(ctx,cameraX,cameraY,W,H,assets){
+    this.drawBg(ctx,cameraX,cameraY,W,H,assets);
+    for(const p of this.platforms) if(this.visible(p,cameraX,cameraY,W,H)){
+      const imgId = p.type==='ground' ? this.groundTileId() : this.skyTileId();
+      if(assets && assets.ready(imgId)){
+        const img=assets.images[imgId];
+        const pat=ctx.createPattern?ctx.createPattern(img,'repeat'):null;
+        ctx.fillStyle=pat||'#333';
+      } else ctx.fillStyle=p.type==='sky'?'#4d4a65':'#333';
+      ctx.fillRect(p.x,p.y,p.w,p.h);
+      ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(p.x,p.y,p.w,4);
+    }
+
+    for(const c of this.chests) if(this.visible(c,cameraX,cameraY,W,H)){
+      ctx.fillStyle=c.open?'#4a3018':'#8b5a20';ctx.fillRect(c.x,c.y,c.w,c.h);ctx.fillStyle='#ffd21c';ctx.fillRect(c.x+13,c.y+9,12,5);
+    }
+    for(const s of this.shops) if(this.visible(s,cameraX,cameraY,W,H)){
+      if(assets && assets.drawImg(ctx,'shop',s.x-10,s.y-8,s.w+20,s.h+12,false)){}
+      else {ctx.fillStyle='#2b1d12';ctx.fillRect(s.x,s.y,s.w,s.h);ctx.fillStyle='#ffd21c';ctx.fillRect(s.x-10,s.y-22,s.w+20,22);ctx.fillStyle='#111';ctx.font='bold 12px Arial';ctx.fillText('SHOP',s.x+17,s.y-7);}
+      ctx.fillStyle='rgba(255,210,28,.18)';ctx.fillRect(s.x-42,s.y-8,s.w+84,s.h+16);
+    }
+    if(this.portal){
+      const p=this.portal;
+      if(assets && assets.ready('portalExit')) assets.drawImg(ctx,'portalExit',p.x-16,p.y-10,104,110,false);
+      else {ctx.fillStyle=this.levelIndex>=this.biomes.length-1?'rgba(180,0,0,.45)':'rgba(255,210,28,.32)';ctx.fillRect(p.x,p.y,p.w,p.h); ctx.strokeStyle='#ffd21c';ctx.lineWidth=3;ctx.strokeRect(p.x,p.y,p.w,p.h);}
+      ctx.fillStyle='#ffd21c';ctx.font='bold 13px Arial';ctx.fillText(this.levelIndex>=this.biomes.length-1?'ФИНАЛ':'ВЫХОД',p.x+8,p.y-8);
+    }
+  }
+
+  groundTileId(){
+    return ['forestTile','snowTile','desertTile','swampTile','factoryPlatform','moldPlatform'][this.levelIndex] || 'forestTile';
+  }
+  skyTileId(){
+    return ['forestTile','snowTile','desertTile','swampTile','factoryPlatform','moldPlatform'][this.levelIndex] || 'forestTile';
+  }
+
+  drawBg(ctx,cameraX,cameraY,W,H,assets){
+    const bgId=this.bgIds[this.levelIndex];
+    if(assets && assets.ready(bgId)){
+      const img=assets.images[bgId];
+      const scale=Math.max(W/img.width,H/img.height);
+      const iw=img.width*scale, ih=img.height*scale;
+      const px=cameraX-(cameraX*.18%(iw-W+1));
+      ctx.globalAlpha=.78;
+      ctx.drawImage(img,px,cameraY,iw,ih);
+      if(px+iw<cameraX+W) ctx.drawImage(img,px+iw,cameraY,iw,ih);
+      ctx.globalAlpha=1;
+      ctx.fillStyle='rgba(0,0,0,.38)';ctx.fillRect(cameraX,cameraY,W,H);
+    } else {
+      const palettes=[['#18301f','#0b130d'],['#26333b','#101820'],['#3a2b18','#17100b'],['#12302b','#071512'],['#241f24','#0d0d10'],['#3b1111','#090909']];
+      const p=palettes[this.levelIndex] || palettes[0];
+      const g=ctx.createLinearGradient(0,cameraY,0,cameraY+H);g.addColorStop(0,p[0]);g.addColorStop(1,p[1]);ctx.fillStyle=g;ctx.fillRect(cameraX,cameraY,W,H);
+    }
+
+    for(let i=0;i<18;i++){
+      const x=i*160+40;
+      if(this.levelIndex===0){ctx.fillStyle='rgba(20,42,22,.75)';ctx.fillRect(x,360,24,125);ctx.fillStyle='rgba(36,82,42,.7)';ctx.beginPath();ctx.arc(x+12,340,42,0,Math.PI*2);ctx.fill();}
+      else if(this.levelIndex===1){ctx.fillStyle='rgba(213,232,242,.75)';ctx.fillRect(x,340,80,145);ctx.fillStyle='rgba(255,255,255,.8)';ctx.fillRect(x,340,80,10);}
+      else if(this.levelIndex===2){ctx.fillStyle='rgba(106,75,37,.75)';ctx.fillRect(x+30,390,18,95);ctx.fillRect(x+8,430,62,18);}
+      else if(this.levelIndex===3){ctx.fillStyle='rgba(36,68,61,.75)';ctx.fillRect(x,390,95,95);ctx.fillStyle='rgba(80,180,120,.16)';ctx.fillRect(x,330,100,155);}
+      else if(this.levelIndex===4){ctx.fillStyle='rgba(31,31,36,.75)';ctx.fillRect(x,330,90,155);ctx.fillStyle='rgba(255,210,28,.12)';ctx.fillRect(x+18,360,18,10);ctx.fillRect(x+52,390,18,10);}
+      else {ctx.fillStyle='rgba(90,18,18,.75)';ctx.fillRect(x,360,90,125);ctx.fillStyle='rgba(140,29,29,.75)';ctx.fillRect(x-8,340,106,20);}
+    }
+    ctx.fillStyle='rgba(255,210,28,.22)';ctx.font='bold 34px Arial';ctx.fillText(this.biomeName().toUpperCase(),cameraX+34,cameraY+62);
+  }
+  visible(o,cx,cy,W,H){ return o.x+o.w>cx-80 && o.x<cx+W+80 && o.y+o.h>cy-80 && o.y<cy+H+80; }
+};
