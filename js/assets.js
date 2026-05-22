@@ -22,6 +22,7 @@ KP.Assets = class Assets {
       lenin:'img/sliced/bosses/lenin_boss.png',
 
       shop:'img/shop.svg',
+      menuPoster:'img/menu_poster_v1018.png',
       forestBg:'img/backgrounds/forest.jpg',
       winterBg:'img/backgrounds/winter.jpg',
       desertBg:'img/backgrounds/desert.jpg',

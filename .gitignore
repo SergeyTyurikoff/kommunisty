@@ -1,0 +1,8 @@
+node_modules/
+tmp/
+
+tools/*
+!tools/dev_server.js
+
+playtest-report/
+*.log

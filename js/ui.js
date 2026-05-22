@@ -6,6 +6,9 @@ KP.UI = class UI {
     this.shopOpen=null;
     this.intro=true;
     this.ending=false;
+    this.menuItems=['controls','start'];
+    this.menuIndex=1;
+    this.controlsOpen=false;
   }
 
   draw(game){
@@ -33,9 +36,6 @@ KP.UI = class UI {
       g.assets.drawImg(ctx,'moneyIcon',x+10,y+8,26,26,false);
       g.assets.drawImg(ctx,'hpIcon',x+10,y+52,26,28,false);
     }
-    ctx.fillStyle='#ffd21c';
-    ctx.font='bold 20px Arial';
-    ctx.fillText('',x+40,y+30);
     if(g.assets && w.sprite) g.assets.drawImg(ctx,w.sprite,x+54,y+14,54,24,false);
     ctx.fillStyle='#fff';
     ctx.font='bold 17px Arial';
@@ -160,69 +160,86 @@ KP.UI = class UI {
   }
 
   mainMenu(ctx,game){
-    const pulse=.72+.28*Math.sin(Date.now()/260);
-    ctx.fillStyle='rgba(0,0,0,.78)';
-    ctx.fillRect(0,0,1024,576);
-    ctx.fillStyle='rgba(255,210,28,.08)';
-    ctx.fillRect(66,58,892,460);
-    ctx.strokeStyle='rgba(255,210,28,.42)';
-    ctx.lineWidth=2;
-    ctx.strokeRect(66,58,892,460);
+    if(game.assets && game.assets.ready('menuPoster')) game.assets.drawImg(ctx,'menuPoster',0,0,1024,576,false);
+    else {
+      ctx.fillStyle='#150a08';
+      ctx.fillRect(0,0,1024,576);
+    }
+
+    const topFade=ctx.createLinearGradient(0,0,0,260);
+    topFade.addColorStop(0,'rgba(0,0,0,.7)');
+    topFade.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=topFade;
+    ctx.fillRect(0,0,1024,260);
+
+    const sideFade=ctx.createLinearGradient(610,0,1024,0);
+    sideFade.addColorStop(0,'rgba(0,0,0,0)');
+    sideFade.addColorStop(.45,'rgba(0,0,0,.32)');
+    sideFade.addColorStop(1,'rgba(0,0,0,.82)');
+    ctx.fillStyle=sideFade;
+    ctx.fillRect(560,0,464,576);
+
+    const bottomFade=ctx.createLinearGradient(0,360,0,576);
+    bottomFade.addColorStop(0,'rgba(0,0,0,0)');
+    bottomFade.addColorStop(1,'rgba(0,0,0,.78)');
+    ctx.fillStyle=bottomFade;
+    ctx.fillRect(0,360,1024,216);
 
     ctx.fillStyle='#ffd21c';
-    ctx.textAlign='left';
     ctx.font='bold 18px Arial';
-    ctx.fillText(KP.VERSION||'V 1.0.18',86,94);
-    ctx.font='bold 42px Arial';
-    ctx.fillText('КОММУНИСТЫ ПРОТИВ... ПЛЕСЕНИ!',84,148);
-    ctx.fillStyle='#eee';
-    ctx.font='20px Arial';
-    ctx.fillText('Главное меню операции',86,182);
+    ctx.fillText(KP.VERSION||'V 1.0.18',46,48);
+    ctx.font='bold 44px Arial';
+    ctx.fillText('КОММУНИСТЫ',42,98);
+    ctx.fillText('ПРОТИВ... ПЛЕСЕНИ!',42,144);
+    ctx.fillStyle='#f2dfc7';
+    ctx.font='18px Arial';
+    ctx.fillText('Главное меню операции',46,178);
 
-    ctx.fillStyle='rgba(20,20,20,.86)';
-    ctx.fillRect(86,220,372,188);
-    ctx.strokeStyle='rgba(255,210,28,.5)';
-    ctx.strokeRect(86,220,372,188);
-    ctx.fillStyle='#ffd21c';
-    ctx.font='bold 26px Arial';
-    ctx.fillText('НАЧАТЬ ИГРУ',112,270);
-    ctx.fillStyle='#ddd';
-    ctx.font='17px Arial';
-    ctx.fillText('Enter / Space / ЛКМ / E',112,304);
-    ctx.fillText('Стартует музыка, бой и основной цикл.',112,334);
-    ctx.fillStyle=`rgba(255,210,28,${.35*pulse})`;
-    ctx.fillRect(106,356,272,26);
-    ctx.fillStyle='#111';
-    ctx.font='bold 16px Arial';
-    ctx.fillText('Нажми, чтобы открыть рейд',124,374);
+    const menuX=736;
+    const menuY=402;
+    const boxW=244;
+    const boxH=58;
+    const gap=18;
+    for(let i=0;i<this.menuItems.length;i++){
+      const y=menuY+i*(boxH+gap);
+      const selected=i===this.menuIndex;
+      ctx.fillStyle=selected?'rgba(188,22,14,.88)':'rgba(10,10,10,.72)';
+      ctx.fillRect(menuX,y,boxW,boxH);
+      ctx.strokeStyle=selected?'rgba(255,210,28,.92)':'rgba(255,255,255,.18)';
+      ctx.lineWidth=selected?3:1;
+      ctx.strokeRect(menuX,y,boxW,boxH);
+      ctx.fillStyle=selected?'#ffd21c':'#f4e5cf';
+      ctx.font=selected?'bold 24px Arial':'bold 22px Arial';
+      ctx.fillText(this.menuItems[i]==='start'?'НАЧАТЬ ИГРУ':'УПРАВЛЕНИЕ',menuX+18,y+37);
+    }
 
-    ctx.fillStyle='rgba(20,20,20,.86)';
-    ctx.fillRect(500,220,392,188);
-    ctx.strokeStyle='rgba(255,210,28,.5)';
-    ctx.strokeRect(500,220,392,188);
-    ctx.fillStyle='#ffd21c';
-    ctx.font='bold 24px Arial';
-    ctx.fillText('ОПЕРАЦИОННАЯ СВОДКА',526,270);
-    ctx.fillStyle='#ddd';
-    ctx.font='16px Arial';
-    const brief=[
-      'Шесть биомов, один босс на каждый.',
-      'Время - это и здоровье, и ресурс способностей.',
-      'Противники держат свои платформы и давят умнее.',
-      'Музыка и эффекты загружаются локально в WAV.'
-    ];
-    brief.forEach((line,i)=>ctx.fillText(line,526,304+i*28));
+    ctx.fillStyle='#f2dfc7';
+    ctx.font='14px Arial';
+    ctx.fillText('↑/↓ или W/S - выбор',738,548);
+    ctx.fillText('Enter / Space / ЛКМ / E - подтвердить',738,568);
 
-    ctx.fillStyle='rgba(20,20,20,.86)';
-    ctx.fillRect(86,432,806,58);
-    ctx.strokeStyle='rgba(255,210,28,.38)';
-    ctx.strokeRect(86,432,806,58);
-    ctx.fillStyle='#aaa';
-    ctx.font='15px Arial';
-    ctx.fillText('A/D - ходьба · W/↑ - прыжок · S/↓ - спуск через платформу · F - стоп-время · Q - смена оружия · R - рестарт',108,466);
-    ctx.fillStyle='#65e8ff';
-    ctx.fillText('Музыка включится после первого нажатия, как только начнётся игра.',108,486);
-    ctx.textAlign='left';
+    if(this.controlsOpen){
+      ctx.fillStyle='rgba(7,7,7,.9)';
+      ctx.fillRect(62,340,458,188);
+      ctx.strokeStyle='rgba(255,210,28,.58)';
+      ctx.lineWidth=2;
+      ctx.strokeRect(62,340,458,188);
+      ctx.fillStyle='#ffd21c';
+      ctx.font='bold 24px Arial';
+      ctx.fillText('УПРАВЛЕНИЕ',88,378);
+      ctx.fillStyle='#f2dfc7';
+      ctx.font='16px Arial';
+      const lines=[
+        'A/D или Ф/В - ходьба',
+        'W/↑ - прыжок, S/↓ - спуск через платформу',
+        'ЛКМ/J/О - атака, Q - смена оружия',
+        'E - взаимодействие и выкачивание времени',
+        'Shift - турбо, F - стоп-время, R - рестарт'
+      ];
+      lines.forEach((line,i)=>ctx.fillText(line,88,414+i*28));
+      ctx.fillStyle='#9cc8ff';
+      ctx.fillText('Esc или повторное подтверждение по пункту закроет окно.',88,504);
+    }
   }
 
   endScreen(ctx){

@@ -123,7 +123,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       canJump:b.jump,weight:b.weight,facing:-1,state:'patrol',shootCd:60,jumpCd:80,hurt:0,alertText:'',alertTimer:0,meleeCd:0,
       burn:0,burnDps:0,ramCd:b.ramCd||0,ramTimer:0,ramSpeed:b.ramSpeed||0,ramDuration:b.ramDuration||0,turboCd:120+Math.random()*160,
       turboTimer:0,timeDrained:false,patrolMin:0,patrolMax:99999,floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,laneBias:U.rand(-28,28),
-      strafeBias:Math.random()<.5?-1:1,burstCd:55+Math.random()*70,burstTimer:0
+      strafeBias:Math.random()<.5?-1:1,burstCd:55+Math.random()*70,burstTimer:0,underFireTimer:0
     });
   }
 
@@ -220,8 +220,9 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.hurt=12;
     this.facing=fromX < this.x ? -1 : 1;
     this.vx+=this.facing*knock/Math.max(.7,this.weight);
-    this.lastSeenX=fromX;
+    this.lastSeenX=opts.targetX!==undefined?opts.targetX:fromX;
     this.memoryTimer=Math.max(this.memoryTimer,120);
+    this.underFireTimer=Math.max(this.underFireTimer,140);
     if(opts.burn){
       this.burn=Math.max(this.burn,opts.burn);
       this.burnDps=Math.max(this.burnDps,opts.burnDps||0);
@@ -253,6 +254,7 @@ KP.Enemy = class Enemy extends KP.Entity {
     if(this.meleeCd>0) this.meleeCd--;
     if(this.jumpCd>0) this.jumpCd--;
     if(this.memoryTimer>0) this.memoryTimer--;
+    if(this.underFireTimer>0) this.underFireTimer--;
     if(this.burn>0){
       this.burn--;
       this.hp-=this.burnDps;
@@ -268,10 +270,14 @@ KP.Enemy = class Enemy extends KP.Entity {
     const dir=dx>0?1:-1;
     const sees=this.seePlayer(p);
     const allySupport=this.shouldSupportAllies(game,p,abs);
+    const hearsShots=game.player.attackCd>0 && abs<this.detect*.95 && Math.abs((p.y+p.h/2)-(this.y+this.h/2))<220;
 
     if(sees){
       this.aggro();
       this.rememberPlayer(p,this.shoot?185:155);
+    } else if(hearsShots){
+      this.aggro('Огонь!');
+      this.rememberPlayer(p,this.shoot?145:125);
     } else if(allySupport){
       this.aggro('Контакт!');
     }
@@ -279,7 +285,7 @@ KP.Enemy = class Enemy extends KP.Entity {
     const speedMul=this.updateBossTurbo(game,abs,dir);
     if(this.kind==='lenin') this.updateLeninRam(game,abs,dir);
 
-    if(this.state==='aggro') this.runAggro(game,p,dx,abs,dir,speedMul,sees);
+    if(this.state==='aggro') this.runAggro(game,p,abs,dir,speedMul,sees);
     else this.runPatrol(speedMul);
 
     this.vx*=.88;
@@ -297,18 +303,21 @@ KP.Enemy = class Enemy extends KP.Entity {
     }
   }
 
-  runAggro(game,p,dx,abs,dir,speedMul,sees){
+  runAggro(game,p,abs,dir,speedMul,sees){
     const targetInside=p.x>this.patrolMin-140 && p.x<this.patrolMax+140;
     const canTrackVertical=Math.abs((p.y+p.h)-(this.floorY||this.y+this.h))<210;
     const pressureOk=targetInside && (this.sameFloor(p) || this.shoot || this.kind==='lenin' || canTrackVertical);
     const rememberedX=this.clampTargetX((sees?p.x+p.w/2:this.lastSeenX));
     const center=this.x+this.w/2;
     const pursueDir=rememberedX>=center?1:-1;
+    const pressureFromFire=this.underFireTimer>0 || (game.player.attackCd>0 && abs<this.detect*.95);
     this.facing=pursueDir || dir || this.facing;
 
     if(this.shoot){
       const desiredKeep=Math.max(120,this.keepDistance+this.laneBias*.4);
-      if(abs<desiredKeep*.82){
+      if(pressureFromFire && pressureOk){
+        this.vx+=pursueDir*this.speed*speedMul*.95;
+      } else if(abs<desiredKeep*.82){
         this.vx-=dir*this.speed*speedMul*.8;
       } else if(pressureOk && abs>this.attackRange*.9){
         this.vx+=pursueDir*this.speed*speedMul*(sees?1.08:.7);
@@ -319,11 +328,11 @@ KP.Enemy = class Enemy extends KP.Entity {
       }
       this.shootCd--;
       if(this.shouldCombatJump(p,abs,true,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul);
-      const canFire=sees || (this.memoryTimer>55 && abs<this.attackRange*.78);
+      const canFire=sees || pressureFromFire || (this.memoryTimer>55 && abs<this.attackRange*.78);
       if(canFire && abs<this.attackRange && this.shootCd<=0) this.fire(game,p);
     } else {
       const burst=this.updateBurst(abs);
-      if(pressureOk) this.vx+=pursueDir*this.speed*speedMul*burst;
+      if(pressureOk) this.vx+=pursueDir*this.speed*speedMul*burst*(pressureFromFire?1.18:1);
       else if(this.memoryTimer>0) this.vx+=pursueDir*this.speed*speedMul*.55;
       if(this.shouldCombatJump(p,abs,false,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul*burst);
     }

@@ -77,7 +77,7 @@ KP.Game = class Game {
   update(){
     if(this.input.wasPressed('restart')){ this.restart(); return; }
     if(this.ui.intro){
-      if(this.input.wasPressed('start')||this.input.wasPressed('up')||this.input.wasPressed('attack')||this.input.wasPressed('interact')) this.startGame();
+      this.updateIntroMenu();
       return;
     }
     if(this.ui.ending||this.player.dead) return;
@@ -112,9 +112,35 @@ KP.Game = class Game {
 
   startGame(){
     this.ui.intro=false;
+    this.ui.controlsOpen=false;
     this.audio.play('menuStart',1);
     this.audio.playMusic(true);
     this.toast('Операция началась. Музыка включена, плесень предупреждена.');
+  }
+
+  updateIntroMenu(){
+    if(this.input.wasPressed('up') || this.input.wasPressed('left')){
+      this.ui.menuIndex=(this.ui.menuIndex+this.ui.menuItems.length-1)%this.ui.menuItems.length;
+      this.ui.controlsOpen=false;
+      this.audio.play('pickupAmmo',1.14,.32);
+    }
+    if(this.input.wasPressed('downAct') || this.input.wasPressed('right')){
+      this.ui.menuIndex=(this.ui.menuIndex+1)%this.ui.menuItems.length;
+      this.ui.controlsOpen=false;
+      this.audio.play('pickupAmmo',1.08,.32);
+    }
+    if(this.input.wasPressed('esc') && this.ui.controlsOpen){
+      this.ui.controlsOpen=false;
+      this.audio.play('pickupTime',.94,.32);
+    }
+    const confirm=this.input.wasPressed('start')||this.input.wasPressed('attack')||this.input.wasPressed('interact');
+    if(!confirm) return;
+    if(this.ui.menuItems[this.ui.menuIndex]==='start'){
+      this.startGame();
+      return;
+    }
+    this.ui.controlsOpen=!this.ui.controlsOpen;
+    this.audio.play(this.ui.controlsOpen?'pickupTime':'pickupAmmo',1,.34);
   }
 
   restart(){
@@ -126,6 +152,8 @@ KP.Game = class Game {
     this.ui.ending=false;
     this.ui.shopOpen=null;
     this.ui.inventoryOpen=false;
+    this.ui.menuIndex=1;
+    this.ui.controlsOpen=false;
     this.timeStopFrames=0;
     this.levelTransition=0;
     this.cameraX=0;
@@ -234,7 +262,7 @@ KP.Game = class Game {
       if(!b.alive) continue;
       if(this.bulletHitsBarrier(b)) continue;
       for(const e of this.enemies) if(e.alive&&KP.Utils.rects(b,e)){
-        e.takeDamage(b.dmg,b.knock,b.x,{burn:b.burn,burnDps:b.burnDps});
+        e.takeDamage(b.dmg,b.knock,b.x,{burn:b.burn,burnDps:b.burnDps,targetX:this.player.x+this.player.w/2});
         if(!b.pierce) b.alive=false;
         this.onEnemyHit(e);
         break;
@@ -401,4 +429,70 @@ KP.Game = class Game {
     this.ui.draw(this);
   }
 };
-window.addEventListener('DOMContentLoaded',()=>new KP.Game());
+window.addEventListener('DOMContentLoaded',()=>{
+  const game=new KP.Game();
+  window.__KP_GAME__=game;
+  const placePlayerNearGround=()=>{
+    game.player.y=Math.min(game.player.y, game.world.platforms.find(p=>p.type==='ground').y-game.player.h);
+    game.player.vx=0;
+    game.player.vy=0;
+    game.updateCamera();
+  };
+  const spawnEnemyNearPlayer=(kind='zombie', offsetX=220)=>{
+    const x=KP.Utils.clamp(game.player.x+offsetX, 140, game.world.worldW-180);
+    const e=new KP.Enemy(x,0,kind);
+    const floorY=485;
+    const min=KP.Utils.clamp(x-180, 80, game.world.worldW-320);
+    const max=KP.Utils.clamp(x+180, 260, game.world.worldW-60);
+    e.setPatrol(min,max,floorY);
+    game.applyBiomeScaling(e);
+    e.aggro('Debug contact');
+    game.enemies.push(e);
+    return e;
+  };
+  window.KP_TEST={
+    getGame(){ return window.__KP_GAME__; },
+    startGame(){ if(game && game.ui && game.ui.intro) game.startGame(); },
+    tick(frames=1){ for(let i=0;i<frames;i++) game.update(); },
+    spawnEnemy(kind='zombie', offsetX=220){ return spawnEnemyNearPlayer(kind, offsetX); },
+    clearEnemies(){ game.enemies=[]; game.enemyBullets=[]; return true; },
+    listBiomes(){ return [...game.world.biomes]; },
+    goToBiome(index){
+      const max=game.world.biomes.length-1;
+      const safe=KP.Utils.clamp(index|0,0,max);
+      game.levelIndex=safe;
+      game.world=new KP.World(safe);
+      game.player.x=80;
+      game.player.y=380;
+      game.player.dead=false;
+      game.ui.ending=false;
+      game.ui.shopOpen=null;
+      game.ui.inventoryOpen=false;
+      game.timeStopFrames=0;
+      game.levelTransition=0;
+      game.spawnLevel();
+      placePlayerNearGround();
+      return safe;
+    },
+    nextBiome(){ return this.goToBiome(game.levelIndex+1); },
+    prevBiome(){ return this.goToBiome(game.levelIndex-1); },
+    movePlayer(x,y=null){
+      game.player.x=KP.Utils.clamp(Number(x)||0,0,game.world.worldW-game.player.w);
+      if(y!==null) game.player.y=KP.Utils.clamp(Number(y)||0,0,game.world.worldH-game.player.h);
+      placePlayerNearGround();
+      return {x:game.player.x,y:game.player.y};
+    },
+    snapshot(){
+      return {
+        intro:game.ui.intro,
+        levelIndex:game.levelIndex,
+        biome:game.world.biomeName(),
+        menuIndex:game.ui.menuIndex,
+        controlsOpen:game.ui.controlsOpen,
+        player:{x:game.player.x,y:game.player.y,time:game.player.time,weapon:game.player.weapon},
+        enemies:game.enemies.map(e=>({kind:e.kind,x:e.x,y:e.y,state:e.state,memoryTimer:e.memoryTimer,underFireTimer:e.underFireTimer,alive:e.alive})),
+        bullets:{player:game.playerBullets.length,enemy:game.enemyBullets.length}
+      };
+    }
+  };
+});

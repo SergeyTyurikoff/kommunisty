@@ -174,7 +174,7 @@ KP.Player = class Player extends KP.Entity {
     if(w.type==='melee'){
       const hit={x:this.x+(this.facing>0?this.w:-w.range),y:this.y+8,w:w.range,h:this.h-6};
       for(const e of game.enemies) if(e.alive&&KP.Utils.rects(hit,e)){
-        e.takeDamage(dmg,w.knock+(this.abilities.meleeMastery?4:0),this.x);
+        e.takeDamage(dmg,w.knock+(this.abilities.meleeMastery?4:0),this.x,{targetX:this.x+this.w/2});
         game.onEnemyHit(e);
       }
       game.burst(hit.x+hit.w/2,hit.y+20,w.color,10);

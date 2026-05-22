@@ -27,3 +27,7 @@ Working conventions:
 - Prefer fitting changes into the current lightweight architecture over adding frameworks.
 - Keep new assets local in the repo and avoid external runtime dependencies.
 - Preserve smoke-test compatibility when adding new modules or browser APIs.
+- Before handoff, always try to launch the game locally and perform a real visual/manual menu check in a browser or headless browser when the environment allows it.
+- If a real launch is not possible in the current environment, call that out explicitly in the handoff instead of silently skipping the test.
+- Local automation stack is now based on portable Node.js plus `playwright-core`, using installed Chrome/Edge instead of downloading separate browsers.
+- Debug entrypoint for local checks lives on `window.KP_TEST`; use it for scripted enemy spawns, biome jumps, snapshots, and smoke scenarios.

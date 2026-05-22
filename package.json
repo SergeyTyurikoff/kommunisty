@@ -1,0 +1,21 @@
+{
+  "name": "kommunisty",
+  "version": "1.0.0",
+  "description": "HTML5 Canvas RPG-платформер-прототип.",
+  "main": "smoke_test.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "serve": "node tools\\dev_server.js",
+    "test:play": "node tests\\playtest_smoke.js",
+    "test": "node tests\\playtest_smoke.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright-core": "^1.60.0"
+  }
+}
