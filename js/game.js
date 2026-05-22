@@ -218,8 +218,8 @@ KP.Game = class Game {
       ['runner','pistol','gunner'],
       ['horse','runner','pistol'],
       ['horse','gunner','miniboss'],
-      ['horse','gunner','tank'],
-      ['miniboss','horse','gunner','tank']
+      ['horse','gunner','shielder','sniper'],
+      ['miniboss','horse','gunner','shielder','kamikaze']
     ];
     for(const t of this.world.rushTriggers) if(!t.done&&this.player.x>t.x){
       t.done=true;
