@@ -7,69 +7,86 @@ KP.Player = class Player extends KP.Entity {
     const b=KP.Balance.player;
     const ammoBag={}, maxAmmoBag={};
     for(const [id,a] of Object.entries(KP.Balance.ammoTypes)){
-      ammoBag[id]=a.start;
-      maxAmmoBag[id]=a.max;
+      ammoBag[id]=a.start; maxAmmoBag[id]=a.max;
     }
     Object.assign(this,{
-      x:80,y:380,vx:0,vy:0,w:34,h:58,maxTime:b.maxTime,time:b.maxTime,facing:1,pose:'stand',grounded:false,jumpsLeft:1,
-      ammoBag,maxAmmoBag,money:18,xp:0,level:1,xpNext:70,turbo:0,turboCd:0,weak:0,timeStopCd:0,weapon:'mosin',
-      inventory:['pistol','mosin'],invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
+      x:80,y:380,vx:0,vy:0,w:34,h:58,
+      maxTime:b.maxTime,time:b.maxTime,
+      facing:1,pose:'stand',grounded:false,jumpsLeft:1,
+      ammoBag,maxAmmoBag,money:18,xp:0,level:1,xpNext:70,
+      turbo:0,turboCd:0,weak:0,timeStopCd:0,
+      weapon:'mosin',inventory:['pistol','mosin'],
+      invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
+      // Dodge
+      dodgeTimer:0,dodgeCd:0,dodgeVx:0,
+      // Combo (tracked at game level but reset on player reset)
       abilities:{drain:true,doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
     });
   }
 
   update(game){
-    const input=game.input,b=KP.Balance.player;
+    const input=game.input, b=KP.Balance.player;
     if(this.invuln>0) this.invuln--;
     if(this.attackCd>0) this.attackCd--;
     if(this.timeStopCd>0) this.timeStopCd--;
     if(this.dropTimer>0) this.dropTimer--;
+    if(this.dodgeCd>0) this.dodgeCd--;
 
     this.time-=b.baseTimeDecay;
     if(this.turbo>0){
-      this.turbo--;
-      this.time-=b.turboTimeCostPerFrame;
-      if(this.turbo<=0){
-        this.weak=b.turboCooldown;
-        game.toast('Откат турбо: Феликс временно выжат.');
-      }
-    } else if(this.turboCd>0){
-      this.turboCd--;
-    }
+      this.turbo--; this.time-=b.turboTimeCostPerFrame;
+      if(this.turbo<=0){ this.weak=b.turboCooldown; game.toast('Откат турбо: Феликс временно выжат.'); }
+    } else if(this.turboCd>0){ this.turboCd--; }
     if(this.weak>0) this.weak--;
     if(game.timeStopFrames>0) this.time-=b.timeStopDrainPerFrame;
 
     if(input.wasPressed('turbo')){
       if(!this.abilities.turbo) game.toast('Турбо ещё не открыто. Сначала доберись до пустыни.');
-      else if(this.turbo<=0 && this.turboCd<=0 && this.time>35){
-        this.turbo=b.turboDuration;
-        this.turboCd=b.turboDuration+b.turboCooldown;
+      else if(this.turbo<=0&&this.turboCd<=0&&this.time>35){
+        this.turbo=b.turboDuration; this.turboCd=b.turboDuration+b.turboCooldown;
         game.toast('Турбо: 5 секунд быстрее и сильнее, потом короткая слабость.');
       }
     }
     if(input.wasPressed('timeStop')) this.tryTimeStop(game);
 
+    // Dodge roll
+    if(input.wasPressed('dodge')){
+      if(this.dodgeCd<=0&&this.time>b.dodge.cost){
+        const dodgeSpd=b.dodge.speed*(this.abilities.finalResolve?1.25:1);
+        this.dodgeTimer=b.dodge.duration;
+        this.dodgeCd=b.dodge.cooldown;
+        this.dodgeVx=(input.isDown('left')?-1:input.isDown('right')?1:this.facing)*dodgeSpd;
+        this.time-=b.dodge.cost;
+        this.invuln=Math.max(this.invuln,b.dodge.duration);
+        game.burst(this.x+this.w/2,this.y+this.h/2,'#aaffff',8);
+        game.audio.play('pickupTime',1.18,.6);
+      } else if(this.time<=b.dodge.cost){
+        game.toast('Мало времени для переката.');
+      }
+    }
+
     const speedMul=(this.turbo>0?b.turboSpeed:1)*(this.weak>0?b.weakSpeed:1);
     const left=input.isDown('left'), right=input.isDown('right');
-    if(left){ this.vx-=b.speed*speedMul; this.facing=-1; }
-    if(right){ this.vx+=b.speed*speedMul; this.facing=1; }
 
-    this.pose='stand';
-    this.h=58;
+    if(this.dodgeTimer>0){
+      this.dodgeTimer--;
+      this.vx=this.dodgeVx; // fixed velocity during dodge
+    } else {
+      if(left){ this.vx-=b.speed*speedMul; this.facing=-1; }
+      if(right){ this.vx+=b.speed*speedMul; this.facing=1; }
+    }
 
-    if((input.wasPressed('downAct')||input.isDown('downAct')) && this.grounded && this.floorContact && this.floorContact.type==='sky'){
+    this.pose='stand'; this.h=58;
+
+    if((input.wasPressed('downAct')||input.isDown('downAct'))&&this.grounded&&this.floorContact&&this.floorContact.type==='sky'){
       this.dropPlatform=this.floorContact;
-      this.dropTimer=60;
-      this.y+=14;
-      this.vy=Math.max(this.vy,3.2);
-      this.grounded=false;
-      this.floorContact=null;
+      this.dropTimer=60; this.y+=14; this.vy=Math.max(this.vy,3.2);
+      this.grounded=false; this.floorContact=null;
     }
 
     const maxJumps=this.abilities.doubleJump?2:1;
-    if(input.wasPressed('up') && this.jumpsLeft>0){
-      this.vy=b.jump;
-      this.jumpsLeft--;
+    if(input.wasPressed('up')&&this.jumpsLeft>0){
+      this.vy=b.jump; this.jumpsLeft--;
       game.burst(this.x+this.w/2,this.y+this.h,'#ffd21c',8);
     }
     if(input.wasPressed('weaponNext')) this.nextWeapon(game);
@@ -89,15 +106,9 @@ KP.Player = class Player extends KP.Entity {
 
   tryTimeStop(game){
     const b=KP.Balance.player;
-    if(!this.abilities.timeStop){
-      game.toast('Остановка времени ещё не открыта.');
-      return;
-    }
+    if(!this.abilities.timeStop){ game.toast('Остановка времени ещё не открыта.'); return; }
     if(game.timeStopFrames>0) return;
-    if(this.time < b.timeStopCost+12){
-      game.toast('Мало времени для остановки времени.');
-      return;
-    }
+    if(this.time<b.timeStopCost+12){ game.toast('Мало времени для остановки времени.'); return; }
     this.time-=b.timeStopCost;
     game.timeStopFrames=b.timeStopDuration;
     game.audio.play('timeStop',.96);
@@ -117,21 +128,20 @@ KP.Player = class Player extends KP.Entity {
         e.drainTime(game);
         if(!e.alive) game.onEnemyHit(e);
         this.time=KP.Utils.clamp(this.time+b.drainGainPerFrame,0,this.maxTime);
-        drained=true;
-        this.draining=true;
+        drained=true; this.draining=true;
       }
     }
-    if(drained && Math.random()<.22) game.burst(this.x+this.w/2,this.y+this.h/2,'#65e8ff',2);
+    if(drained&&Math.random()<.22) game.burst(this.x+this.w/2,this.y+this.h/2,'#65e8ff',2);
   }
 
   ammoForCurrentWeapon(){
     const w=KP.Balance.weapons[this.weapon];
     if(!w.ammoType) return Infinity;
-    return this.ammoBag[w.ammoType] || 0;
+    return this.ammoBag[w.ammoType]||0;
   }
 
   addAmmo(type,amount){
-    if(!type || !this.ammoBag.hasOwnProperty(type)) return;
+    if(!type||!this.ammoBag.hasOwnProperty(type)) return;
     this.ammoBag[type]=KP.Utils.clamp(this.ammoBag[type]+amount,0,this.maxAmmoBag[type]);
   }
 
@@ -149,8 +159,8 @@ KP.Player = class Player extends KP.Entity {
   aimVector(game){
     const up=game.input.isDown('up'), down=game.input.isDown('downAct');
     let ax=this.facing, ay=0;
-    if(up && !down) ay=-.62;
-    if(down && !up) ay=.62;
+    if(up&&!down) ay=-.62;
+    if(down&&!up) ay=.62;
     const len=Math.hypot(ax,ay)||1;
     return {x:ax/len,y:ay/len};
   }
@@ -159,23 +169,27 @@ KP.Player = class Player extends KP.Entity {
     const w=KP.Balance.weapons[this.weapon];
     if(this.attackCd>0) return;
     const ammoType=w.ammoType, ammoUse=w.ammoUse||0;
-    if(ammoType && (this.ammoBag[ammoType]||0)<ammoUse){
+    if(ammoType&&(this.ammoBag[ammoType]||0)<ammoUse){
       game.toast(`Нет боеприпасов: ${KP.Balance.ammoTypes[ammoType].name}.`);
       return;
     }
     this.attackCd=w.delay/16.67;
     if(ammoType) this.ammoBag[ammoType]-=ammoUse;
-    let dmg=w.dmg*this.damageMultiplier();
-    if(this.abilities.meleeMastery && w.type==='melee') dmg*=1.35;
+    let dmg=w.dmg*this.damageMultiplier()*(game.comboMul||1);
+    if(this.abilities.meleeMastery&&w.type==='melee') dmg*=1.35;
     if(this.abilities.finalResolve) dmg*=1.10;
     const aim=this.aimVector(game);
     game.audio.playWeapon(this.weapon);
 
     if(w.type==='melee'){
       const hit={x:this.x+(this.facing>0?this.w:-w.range),y:this.y+8,w:w.range,h:this.h-6};
+      let hitAny=false;
       for(const e of game.enemies) if(e.alive&&KP.Utils.rects(hit,e)){
-        e.takeDamage(dmg,w.knock+(this.abilities.meleeMastery?4:0),this.x,{targetX:this.x+this.w/2});
-        game.onEnemyHit(e);
+        e.takeDamage(dmg,w.knock+(this.abilities.meleeMastery?4:0),this.x,{targetX:this.x+this.w/2},game);
+        game.onEnemyHit(e,true,dmg);
+        game.registerHit(dmg);
+        game.damageNumbers.push(new KP.DamageNumber(e.x+e.w/2,e.y,dmg,dmg>50));
+        hitAny=true;
       }
       game.burst(hit.x+hit.w/2,hit.y+20,w.color,10);
       return;
@@ -206,61 +220,55 @@ KP.Player = class Player extends KP.Entity {
 
   hurt(timeLoss,dir,game=null){
     if(this.invuln>0) return;
-    this.time-=timeLoss;
-    this.invuln=42;
-    this.vx+=dir*7;
-    this.vy=-3.5;
+    this.time-=timeLoss; this.invuln=42;
+    this.vx+=dir*7; this.vy=-3.5;
     if(game){
       if(this.time<=0) game.audio.play('playerDown',1);
       else game.audio.play('playerHit',0.96+Math.random()*0.08);
     }
-    if(this.time<=0){
-      this.time=0;
-      this.dead=true;
-    }
+    if(this.time<=0){ this.time=0; this.dead=true; }
   }
 
   gainXP(game,amount){
     this.xp+=amount;
     while(this.xp>=this.xpNext){
-      this.xp-=this.xpNext;
-      this.level++;
+      this.xp-=this.xpNext; this.level++;
       this.xpNext=Math.round(this.xpNext*1.4+30);
-      this.maxTime+=12;
-      this.time=Math.min(this.maxTime,this.time+38);
-      for(const t of Object.keys(this.maxAmmoBag)) this.maxAmmoBag[t]+= t==='machinegun'?18:t==='fuel'?14:6;
-      game.toast('Уровень '+this.level+': больше времени и боезапаса.');
+      this.maxTime+=12; this.time=Math.min(this.maxTime,this.time+38);
+      for(const t of Object.keys(this.maxAmmoBag)) this.maxAmmoBag[t]+=t==='machinegun'?18:t==='fuel'?14:6;
+      game.toast(`Уровень ${this.level}: больше времени и боезапаса.`);
     }
   }
 
-  unlockAbility(id, game){
-    if(!id || this.abilities[id]) return;
+  unlockAbility(id,game){
+    if(!id||this.abilities[id]) return;
     this.abilities[id]=true;
     const meta=(KP.Balance.abilityUnlocks||[]).find(a=>a.id===id);
     if(game) game.toast('Открыта способность: '+(meta?meta.name:id)+'. '+(meta?meta.desc:''));
   }
 
   draw(ctx,assets){
+    // Dodge afterimage
+    if(this.dodgeTimer>0){
+      ctx.save();
+      ctx.globalAlpha=this.dodgeTimer/KP.Balance.player.dodge.duration*0.4;
+      ctx.fillStyle='#65e8ff';
+      ctx.fillRect(this.x-this.facing*10,this.y+4,this.w,this.h-4);
+      ctx.restore();
+    }
     if(this.invuln>0&&Math.floor(this.invuln/5)%2===0) return;
     if(this.turbo>0){
       ctx.fillStyle='rgba(255,138,28,.28)';
-      ctx.beginPath();
-      ctx.ellipse(this.x+17-this.facing*16,this.y+32,22,38,0,0,Math.PI*2);
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(this.x+17-this.facing*16,this.y+32,22,38,0,0,Math.PI*2); ctx.fill();
     }
     if(this.weak>0){
       ctx.fillStyle='rgba(80,80,80,.25)';
-      ctx.beginPath();
-      ctx.ellipse(this.x+17,this.y+32,24,40,0,0,Math.PI*2);
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(this.x+17,this.y+32,24,40,0,0,Math.PI*2); ctx.fill();
     }
     if(this.draining){
-      ctx.strokeStyle='#65e8ff';
-      ctx.lineWidth=3;
-      ctx.beginPath();
-      ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2);
-      ctx.stroke();
+      ctx.strokeStyle='#65e8ff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2); ctx.stroke();
     }
-    assets.drawHero(ctx,this.x,this.y,this.pose,this.facing,this.weapon);
+    assets.drawHero(ctx,this.x,this.y,this.pose,this.facing,this.weapon,this.dodgeTimer);
   }
 };
