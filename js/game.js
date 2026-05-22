@@ -20,6 +20,7 @@ KP.Game = class Game {
     this.toastText=''; this.toastTimer=0;
     this.timeStopFrames=0; this.levelTransition=0;
     this.paused=false; this.deathStats=null;
+    this.combatPressure=0;
     // Combo system
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.spawnLevel();
@@ -54,13 +55,15 @@ KP.Game = class Game {
 
   applyBiomeScaling(e){
     const boss=KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss';
-    const hpScale=1+this.levelIndex*(boss?0.22:0.18);
-    const dmgScale=1+this.levelIndex*(boss?0.16:0.13);
+    const hpScale=1+this.levelIndex*(boss?0.28:0.22);
+    const dmgScale=1+this.levelIndex*(boss?0.20:0.17);
+    const speedScale=1+this.levelIndex*(boss?0.06:0.10);
     e.hp=Math.round(e.hp*hpScale); e.maxHp=e.hp;
     e.hitTime=Math.round(e.hitTime*dmgScale);
     e.dmg=Math.round(e.dmg*dmgScale);
-    e.xp=Math.round(e.xp*(1+this.levelIndex*.12));
-    e.moneyRange=e.moneyRange.map(v=>Math.round(v*(1+this.levelIndex*.16)));
+    e.speed=+(e.speed*speedScale).toFixed(4);
+    e.xp=Math.round(e.xp*(1+this.levelIndex*.14));
+    e.moneyRange=e.moneyRange.map(v=>Math.round(v*(1+this.levelIndex*.18)));
   }
 
   loop(){
@@ -96,6 +99,15 @@ KP.Game = class Game {
     // Combo decay
     if(this.comboTimer>0){ this.comboTimer--; }
     else { this.comboCount=0; this.comboMul=1; }
+
+    // Combat pressure: extra time decay when enemies are nearby
+    const nearEnemy=this.enemies.some(e=>e.alive&&Math.abs(e.x-this.player.x)<280&&Math.abs(e.y-this.player.y)<160);
+    if(nearEnemy&&this.timeStopFrames<=0){
+      this.combatPressure=Math.min(120,this.combatPressure+3);
+      this.player.time=KP.Utils.clamp(this.player.time-KP.Balance.player.combatDecayBonus,0,this.player.maxTime);
+    } else {
+      this.combatPressure=Math.max(0,this.combatPressure-2);
+    }
 
     if(this.ui.shopOpen){ this.shopInput(); return; }
     if(this.input.wasPressed('interact')){
@@ -162,6 +174,7 @@ KP.Game = class Game {
     this.player.reset();
     this.kills=0; this.maxCombo=1;
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
+    this.combatPressure=0;
     this.ui.intro=true; this.ui.ending=false;
     this.ui.shopOpen=null; this.ui.inventoryOpen=false;
     this.ui.menuIndex=1; this.ui.controlsOpen=false;
@@ -200,18 +213,29 @@ KP.Game = class Game {
   }
 
   checkRush(){
+    const rushKinds=[
+      ['runner','zombie','pistol'],
+      ['runner','pistol','gunner'],
+      ['horse','runner','pistol'],
+      ['horse','gunner','miniboss'],
+      ['horse','gunner','tank'],
+      ['miniboss','horse','gunner','tank']
+    ];
     for(const t of this.world.rushTriggers) if(!t.done&&this.player.x>t.x){
       t.done=true;
-      this.toast('Поздний раш. Теперь противник давит числом и скоростью.');
-      const min=KP.Utils.clamp(this.player.x+150,760,this.world.worldW-650);
-      const max=Math.min(min+460,this.world.worldW-140);
-      const count=4+Math.min(4,this.levelIndex);
+      const wave=t.wave||0;
+      const kinds=rushKinds[this.levelIndex]||rushKinds[0];
+      const count=3+wave*2+Math.min(3,this.levelIndex);
+      const min=KP.Utils.clamp(this.player.x+180,760,this.world.worldW-600);
+      const max=Math.min(min+480,this.world.worldW-120);
+      const messages=['Противник давит!','Волна подкрепления!','Последний рубеж!'];
+      this.toast(messages[wave]||'Ещё одна волна!');
       for(let i=0;i<count;i++){
-        const kind=i%3===0?'runner':'zombie';
-        const e=new KP.Enemy(min+30+i*70,0,kind);
+        const kind=kinds[i%kinds.length];
+        const e=new KP.Enemy(min+30+i*60,0,kind);
         e.setPatrol(min,max,485);
         this.applyBiomeScaling(e);
-        e.aggro('Раааш!');
+        e.aggro('Атака!');
         this.enemies.push(e);
       }
     }

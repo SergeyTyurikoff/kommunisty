@@ -41,7 +41,9 @@ KP.World = class World {
       this.crates.push(new KP.Crate(cx,449));
     }
 
-    this.rushTriggers.push({x:2120,done:false,floorY:485});
+    this.rushTriggers.push({x:900, done:false,floorY:485,wave:0});
+    this.rushTriggers.push({x:1700,done:false,floorY:485,wave:1});
+    this.rushTriggers.push({x:2400,done:false,floorY:485,wave:2});
     this.portal={x:2960,y:395,w:70,h:90,active:true};
 
     this.buildEnemySpawns([ground,high1,high2,high3,...sky]);
@@ -50,11 +52,11 @@ KP.World = class World {
   buildEnemySpawns(platforms){
     const normalByLevel=[
       ['zombie','runner','pistol'],
-      ['zombie','pistol','gunner'],
-      ['runner','horse','pistol'],
-      ['zombie','runner','gunner','miniboss'],
-      ['pistol','gunner','tank','miniboss'],
-      ['zombie','runner','gunner','horse','tank','miniboss']
+      ['zombie','runner','pistol','kamikaze'],
+      ['runner','horse','pistol','kamikaze'],
+      ['zombie','runner','gunner','miniboss','kamikaze'],
+      ['pistol','gunner','shielder','miniboss','sniper'],
+      ['zombie','runner','gunner','horse','shielder','miniboss','sniper','kamikaze']
     ][this.levelIndex]||['zombie'];
 
     const add=(p,xFrac,kind,radius=125)=>{
@@ -171,6 +173,7 @@ KP.World = class World {
     // Shops
     for(const s of this.shops) if(this.visible(s,cameraX,cameraY,W,H)){
       if(assets&&assets.drawImg(ctx,'shop',s.x-10,s.y-8,s.w+20,s.h+12,false)){}
+      else if(assets) assets.drawShop(ctx,s.x,s.y,s.w,s.h);
       else {
         ctx.fillStyle='#2b1d12'; ctx.fillRect(s.x,s.y,s.w,s.h);
         ctx.fillStyle='#ffd21c'; ctx.fillRect(s.x-10,s.y-22,s.w+20,22);

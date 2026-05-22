@@ -125,14 +125,29 @@ KP.Bullet = class Bullet extends KP.Entity {
       ctx.globalAlpha=1;
     }
     if(this.flame){
+      // Flamethrower blob with outer glow
+      ctx.save();
+      ctx.globalAlpha=.35; ctx.fillStyle='#ff8800';
+      ctx.beginPath(); ctx.arc(this.x,this.y,18,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1;
       ctx.fillStyle='#ff5b1a'; ctx.beginPath(); ctx.arc(this.x,this.y,12,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='rgba(255,210,70,.7)'; ctx.beginPath(); ctx.arc(this.x-4,this.y,7,0,Math.PI*2); ctx.fill();
+      ctx.restore();
     } else {
+      // Enemy bullet: green glow halo
+      if(this.owner==='enemy'){
+        ctx.save();
+        ctx.globalAlpha=.25; ctx.fillStyle=this.color;
+        ctx.beginPath(); ctx.arc(this.x,this.y,this.w,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
       ctx.save();
       ctx.translate(this.x,this.y);
       ctx.rotate(Math.atan2(this.vy,this.vx));
-      ctx.fillStyle=this.color; ctx.beginPath(); ctx.ellipse(0,0,10,3.4,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,.75)'; ctx.fillRect(-3,-1,6,2);
+      // Sniper bullet: larger elongated
+      const rx=this.w>10?14:10, ry=this.w>10?4.5:3.4;
+      ctx.fillStyle=this.color; ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.75)'; ctx.fillRect(-rx*.4,-1,rx*.8,2);
       ctx.restore();
     }
   }
@@ -183,7 +198,7 @@ KP.Pickup = class Pickup extends KP.Entity {
 KP.Enemy = class Enemy extends KP.Entity {
   constructor(x,y,kind){
     const bossKinds=['lenin','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss'];
-    const size=kind==='tank'?[104,62]:kind==='horse'?[70,62]:bossKinds.includes(kind)?[86,88]:kind==='miniboss'?[50,60]:[42,52];
+    const size=kind==='horse'?[70,62]:kind==='shielder'?[50,56]:bossKinds.includes(kind)?[86,88]:kind==='miniboss'?[50,60]:[42,52];
     super(x,y,size[0],size[1]);
     const b=KP.Balance.enemies[kind];
     Object.assign(this,{
@@ -196,7 +211,14 @@ KP.Enemy = class Enemy extends KP.Entity {
       patrolMin:0,patrolMax:99999,floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,
       laneBias:U.rand(-28,28),strafeBias:Math.random()<.5?-1:1,
       burstCd:55+Math.random()*70,burstTimer:0,underFireTimer:0,
-      phase2:false,phase2Triggered:false
+      phase2:false,phase2Triggered:false,
+      // Per-enemy abilities
+      rollTimer:0,   rollCd:  kind==='runner'  ?(55+Math.random()*60|0):9999,
+      lungeCd:       kind==='zombie'   ?(75+Math.random()*80|0):9999,  lungeTimer:0,
+      mbShieldTimer:0, mbShieldCd: kind==='miniboss'?(200+Math.random()*140|0):9999,
+      sniperScope:0,
+      explodeArmed:  kind==='kamikaze',
+      shieldFlash:0
     });
   }
 
@@ -277,6 +299,21 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   takeDamage(dmg,knock,fromX,opts={},game=null){
+    // Miniboss shield absorbs one hit
+    if(this.kind==='miniboss'&&this.mbShieldTimer>0){
+      this.mbShieldTimer=0; this.shieldFlash=20;
+      if(game) game.burst(this.x+this.w/2,this.y+this.h/2,'#aaddff',16);
+      return;
+    }
+    // Shielder: front-facing shield reduces incoming damage from front
+    if(this.kind==='shielder'){
+      const fromFront=(fromX<this.x+this.w/2)===(this.facing<0);
+      if(fromFront){ dmg=Math.round(dmg*0.12); knock*=0.12; this.shieldFlash=10; }
+    }
+    // Kamikaze explodes on death
+    if(this.kind==='kamikaze'&&this.hp-dmg<=0&&this.explodeArmed&&game){
+      this._kamikazeExplode(game); return;
+    }
     this.hp-=dmg;
     this.hurt=12;
     this.facing=fromX<this.x?-1:1;
@@ -345,6 +382,7 @@ KP.Enemy = class Enemy extends KP.Entity {
 
     const speedMul=this.updateBossTurbo(game,abs,dir);
     if(this.kind==='lenin') this.updateLeninRam(game,abs,dir);
+    this._updateAbilities(game,p,abs,dir);
 
     if(this.state==='aggro') this.runAggro(game,p,abs,dir,speedMul,sees);
     else this.runPatrol(speedMul);
@@ -432,6 +470,60 @@ KP.Enemy = class Enemy extends KP.Entity {
     }
   }
 
+  _updateAbilities(game,p,abs,dir){
+    if(this.rollCd>0) this.rollCd--;
+    if(this.rollTimer>0) this.rollTimer--;
+    if(this.lungeCd>0) this.lungeCd--;
+    if(this.lungeTimer>0){ this.lungeTimer--; this.vx+=this.facing*3.2; }
+    if(this.mbShieldTimer>0) this.mbShieldTimer--;
+    if(this.mbShieldCd>0) this.mbShieldCd--;
+    if(this.shieldFlash>0) this.shieldFlash--;
+
+    // Zombie lunge charge
+    if(this.kind==='zombie'&&this.state==='aggro'&&this.lungeCd<=0&&abs<200&&this.grounded){
+      this.lungeTimer=16; this.lungeCd=90+Math.random()*60|0;
+      this.alertText='РЫВОК!'; this.alertTimer=40;
+    }
+
+    // Runner dodge-roll when under fire
+    if(this.kind==='runner'&&this.rollCd<=0&&this.underFireTimer>60&&this.grounded&&Math.random()<.04){
+      const dodgeDir=(Math.random()<.5?-1:1);
+      this.vx=dodgeDir*9; this.vy=-3.5;
+      this.rollTimer=14; this.rollCd=100+Math.random()*60|0;
+      this.hurt=0; // brief visual immunity
+    }
+
+    // Miniboss periodic shield
+    if(this.kind==='miniboss'&&this.state==='aggro'&&this.mbShieldCd<=0&&this.mbShieldTimer<=0){
+      this.mbShieldTimer=65; this.mbShieldCd=240+Math.random()*120|0;
+      this.alertText='ЩИТ!'; this.alertTimer=65;
+    }
+
+    // Sniper scope wind-up before shot
+    if(this.kind==='sniper'&&this.shoot&&this.state==='aggro'&&this.shootCd>0){
+      const scopeStart=KP.Balance.enemies.sniper.scopeFrames||80;
+      this.sniperScope=Math.max(0, this.shootCd<=scopeStart ? this.shootCd : 0);
+    }
+
+    // Kamikaze self-destruct when HP very low
+    if(this.kind==='kamikaze'&&this.explodeArmed&&this.hp<this.maxHp*.3&&Math.random()<.04){
+      this._kamikazeExplode(game);
+    }
+  }
+
+  _kamikazeExplode(game){
+    if(!this.explodeArmed) return;
+    this.explodeArmed=false; this.alive=false;
+    const cx=this.x+this.w/2, cy=this.y+this.h/2;
+    const r=KP.Balance.enemies.kamikaze.explodeRadius||100;
+    game.burst(cx,cy,'#ff4400',45); game.burst(cx,cy,'#ffcc00',28); game.burst(cx,cy,'#ffffff',14);
+    if(game.audio) game.audio.play('enemyDown',1.4);
+    const pd=Math.hypot(game.player.x+game.player.w/2-cx, game.player.y+game.player.h/2-cy);
+    if(pd<r) game.player.hurt(KP.Balance.enemies.kamikaze.explodeDmg||50, cx<game.player.x?1:-1, game);
+    for(const c of game.world.crates) if(c.alive&&Math.hypot(c.x+c.w/2-cx,c.y+c.h/2-cy)<r) c.takeDamage(game);
+    if(game.toast) game.toast('Камикадзе взорвался!');
+  }
+
   fire(game,p){
     this.shootCd=Math.max(18,Math.round(this.fireDelay*(this.memoryTimer>85?0.92:1)));
     const c=U.center(this),pc=U.center(p);
@@ -440,9 +532,21 @@ KP.Enemy = class Enemy extends KP.Entity {
     const tx=pc.x+(p.vx||0)*travelFrames*1.65;
     const ty=pc.y+(p.vy||0)*Math.min(10,travelFrames)*1.2;
     const dx=tx-c.x,dy=ty-c.y,len=Math.hypot(dx,dy)||1;
+    const bColor=this.kind==='sniper'?'#ffee44':this.kind==='kamikaze'?'#ff6600':'#76ff54';
+    const bSize=this.kind==='sniper'?14:10;
     game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,dx/len*this.bulletSpeed,dy/len*this.bulletSpeed,{
-      dmg:this.hitTime,range:700,color:this.kind==='tank'?'#ff4040':'#76ff54',knock:4,size:this.kind==='tank'?15:10
+      dmg:this.hitTime,range:700,color:bColor,knock:4,size:bSize
     }));
+    // Gunner burst: 2 extra spread shots
+    if(this.kind==='gunner'){
+      for(const sp of[-0.12,0.12]){
+        const nx=dx/len*Math.cos(sp)-dy/len*Math.sin(sp);
+        const ny=dx/len*Math.sin(sp)+dy/len*Math.cos(sp);
+        game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,nx*this.bulletSpeed*.85,ny*this.bulletSpeed*.85,{
+          dmg:Math.round(this.hitTime*.65),range:580,color:'#ff9933',knock:1.5,size:8
+        }));
+      }
+    }
     // Phase 2: double-tap at low HP
     if(this.phase2&&Math.random()<0.35){
       const spread=(Math.random()-.5)*0.25;
@@ -479,6 +583,52 @@ KP.Enemy = class Enemy extends KP.Entity {
       ctx.strokeStyle='rgba(255,0,0,.6)'; ctx.lineWidth=3;
       ctx.beginPath(); ctx.arc(this.x+this.w/2,this.y+this.h/2,this.w*.72+Math.sin(Date.now()/120)*4,0,Math.PI*2); ctx.stroke();
     }
+    // Miniboss shield bubble
+    if(this.kind==='miniboss'&&this.mbShieldTimer>0){
+      ctx.save();
+      ctx.globalAlpha=0.55+Math.sin(Date.now()/80)*0.15;
+      ctx.strokeStyle='#66ccff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(this.x+this.w/2,this.y+this.h/2,this.w*.78,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='rgba(100,200,255,.12)';
+      ctx.beginPath(); ctx.arc(this.x+this.w/2,this.y+this.h/2,this.w*.78,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    // Shield flash (when blocked)
+    if(this.shieldFlash>0){
+      ctx.save(); ctx.globalAlpha=this.shieldFlash/20;
+      ctx.fillStyle='#aaddff';
+      ctx.fillRect(this.x-4,this.y-4,this.w+8,this.h+8);
+      ctx.restore();
+    }
+    // Kamikaze warning flash when about to explode
+    if(this.kind==='kamikaze'&&this.hp<this.maxHp*.4&&this.explodeArmed){
+      ctx.save();
+      ctx.globalAlpha=(0.4+Math.sin(Date.now()/60)*0.4);
+      ctx.fillStyle='#ff3300';
+      ctx.fillRect(this.x-2,this.y-2,this.w+4,this.h+4);
+      ctx.restore();
+    }
+    // Runner roll dust
+    if(this.kind==='runner'&&this.rollTimer>0){
+      ctx.save(); ctx.globalAlpha=0.55;
+      ctx.fillStyle='rgba(200,180,120,.6)';
+      ctx.beginPath(); ctx.ellipse(this.x+this.w/2,this.y+this.h,this.w*.65,8,0,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    // Sniper scope beam
+    if(this.kind==='sniper'&&this.sniperScope>0){
+      ctx.save();
+      ctx.globalAlpha=Math.min(1,this.sniperScope/30)*0.7;
+      ctx.strokeStyle='#ffee00'; ctx.lineWidth=1;
+      ctx.setLineDash([5,4]);
+      ctx.beginPath();
+      ctx.moveTo(this.x+this.w/2, this.y+this.h/2);
+      ctx.lineTo(this.x+this.facing*640+this.w/2, this.y+this.h/2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     if(this.alertTimer>0){
       ctx.fillStyle='rgba(20,10,5,.88)';
       ctx.fillRect(this.x-18,this.y-46,Math.max(100,this.alertText.length*7.5),26);

@@ -28,139 +28,160 @@ KP.UI = class UI {
     const U=KP.Utils;
     const w=KP.Balance.weapons[p.weapon];
     const at=w.ammoType;
-    const x=688, y=12, wid=328, ht=166;
 
-    // Panel background
-    ctx.fillStyle='rgba(8,6,4,.78)';
-    ctx.fillRect(x,y,wid,ht);
-    ctx.strokeStyle='rgba(180,140,20,.7)';
-    ctx.lineWidth=1.5; ctx.strokeRect(x,y,wid,ht);
+    // === COMBAT DANGER VIGNETTE ===
+    if(game.combatPressure>0){
+      const v=Math.min(1,game.combatPressure/90)*0.13;
+      ctx.fillStyle=`rgba(200,0,0,${v})`;
+      ctx.fillRect(0,0,8,576); ctx.fillRect(1016,0,8,576);
+      ctx.fillRect(0,0,1024,8); ctx.fillRect(0,568,1024,8);
+    }
 
-    // --- ROW 1: weapon + ammo ---
-    if(game.assets&&w.sprite) game.assets.drawImg(ctx,w.sprite,x+6,y+8,52,22,false);
-    ctx.fillStyle='#fff'; ctx.font='bold 16px Arial';
-    ctx.fillText(w.name,x+64,y+22);
-    const ammoText=at?`${p.ammoBag[at]}/${p.maxAmmoBag[at]} ${KP.Balance.ammoTypes[at].short}`:'∞';
-    ctx.fillStyle='#bbb'; ctx.font='13px Arial'; ctx.fillText(ammoText,x+64,y+40);
+    // === ROW 1: top bar, 54px ===
+    ctx.fillStyle='rgba(6,5,3,.88)';
+    ctx.fillRect(0,0,1024,54);
+    ctx.strokeStyle='rgba(160,120,16,.55)';
+    ctx.lineWidth=1; ctx.strokeRect(0,54,1024,0);
 
-    // --- ROW 2: TIME bar ---
-    ctx.fillStyle='#65e8ff'; ctx.font='bold 12px Arial'; ctx.fillText('ВРЕМЯ',x+6,y+58);
-    U.drawBar(ctx,x+52,y+46,268,16,p.time/p.maxTime,'#65e8ff');
-    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.font='bold 11px Arial';
-    ctx.fillText(`${Math.round(p.time)}/${p.maxTime}`,x+170,y+58);
+    // LEFT — weapon icon + name + ammo
+    if(game.assets&&w.sprite) game.assets.drawImg(ctx,w.sprite,8,8,46,28,false);
+    ctx.fillStyle='#f2f2f2'; ctx.font='bold 16px Arial';
+    ctx.fillText(w.name,62,24);
+    const ammoText=at?`${p.ammoBag[at]} / ${p.maxAmmoBag[at]}  ${KP.Balance.ammoTypes[at].short}`:'∞';
+    const lowAmmo=at&&p.ammoBag[at]<p.maxAmmoBag[at]*0.25;
+    ctx.fillStyle=lowAmmo?'#ff4040':'#999'; ctx.font='13px Arial';
+    ctx.fillText(ammoText,62,41);
 
-    // --- ROW 3: Money | Level | Kills ---
-    // Money icon + value
-    if(game.assets) game.assets.drawImg(ctx,'moneyIcon',x+6,y+68,20,20,false);
-    ctx.fillStyle='#ffd21c'; ctx.font='bold 14px Arial';
-    ctx.fillText(`${p.money}`,x+30,y+83);
-    // Level badge
-    ctx.fillStyle='#cc2200'; ctx.fillRect(x+84,y+67,56,20);
+    // CENTER — TIME bar (wide, color-coded)
+    const timeRatio=U.clamp(p.time/p.maxTime,0,1);
+    const timeColor=timeRatio>0.5?'#00e870':timeRatio>0.25?'#ffcc00':'#ff2200';
+    const timePulse=timeRatio<0.25?(0.7+Math.sin(Date.now()/120)*0.3):1;
+    const bx=280, bw=464, bh=28, by=12;
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(bx,by,bw,bh);
+    ctx.globalAlpha=timePulse;
+    ctx.fillStyle=timeColor; ctx.fillRect(bx,by,bw*timeRatio,bh);
+    ctx.fillStyle='rgba(255,255,255,.13)'; ctx.fillRect(bx,by,bw*timeRatio,bh/3);
+    ctx.globalAlpha=1;
+    ctx.strokeStyle=timeRatio<0.25?`rgba(255,50,50,${timePulse})`:'rgba(255,255,255,.18)';
+    ctx.lineWidth=1.5; ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='bold 13px Arial'; ctx.textAlign='center';
+    ctx.fillText('ВРЕМЯ',bx+44,by+19);
+    ctx.fillStyle='#fff'; ctx.font='bold 14px Arial';
+    ctx.fillText(`${Math.round(p.time)} / ${p.maxTime}`,bx+bw*0.62,by+19);
+    ctx.textAlign='left';
+
+    // RIGHT — money, level badge, kills, turbo
+    if(game.assets) game.assets.drawImg(ctx,'moneyIcon',756,12,20,20,false);
+    ctx.fillStyle='#ffd21c'; ctx.font='bold 15px Arial';
+    ctx.fillText(`${p.money}`,780,28);
+    ctx.fillStyle='#8b0000'; ctx.fillRect(826,10,54,22);
+    ctx.strokeStyle='#cc2200'; ctx.lineWidth=1; ctx.strokeRect(826,10,54,22);
     ctx.fillStyle='#ffd21c'; ctx.font='bold 12px Arial';
-    ctx.fillText(`ЛВЛ ${p.level}`,x+88,y+81);
-    // Kills
-    ctx.fillStyle='#aaa'; ctx.font='12px Arial';
-    ctx.fillText(`☆ ${game.kills}`,x+152,y+81);
-
-    // --- ROW 4: XP bar ---
-    ctx.fillStyle='#9df542'; ctx.font='bold 11px Arial'; ctx.fillText('XP',x+6,y+100);
-    U.drawBar(ctx,x+24,y+90,180,11,p.xp/p.xpNext,'#9df542');
-    ctx.fillStyle='#9df542'; ctx.font='11px Arial'; ctx.fillText(`${p.xp}/${p.xpNext}`,x+210,y+100);
-
-    // Turbo status
-    ctx.fillStyle=p.turbo>0?'#ff8a1c':p.weak>0?'#888':p.abilities.turbo?'#ff6600':'#555';
-    ctx.font='bold 11px Arial';
-    ctx.fillText(p.turbo>0?'ТУРБО ON':p.weak>0?'слабость':p.abilities.turbo?'турбо ГТВ':'турбо —',x+210,y+81);
-
-    // --- ROW 5: Minimap ---
-    const mx=x+6, my=y+108, mw=314, mh=18;
-    if(game.assets&&game.assets.ready('minimap')){
-      ctx.globalAlpha=.22; game.assets.drawImg(ctx,'minimap',mx,my-5,mw,30,false); ctx.globalAlpha=1;
+    ctx.fillText(`ЛВЛ ${p.level}`,830,25);
+    ctx.fillStyle='#bbb'; ctx.font='13px Arial';
+    ctx.fillText(`★ ${game.kills}`,892,28);
+    const turboLabel=p.turbo>0?'ТУРБО':p.weak>0?'слаб':'';
+    if(turboLabel){
+      ctx.fillStyle=p.turbo>0?'#ff8a1c':'#666'; ctx.font='bold 11px Arial';
+      ctx.fillText(turboLabel,952,28);
     }
-    ctx.fillStyle='#0a0a0a'; ctx.fillRect(mx,my,mw,mh);
-    ctx.strokeStyle='#ffd21c'; ctx.lineWidth=1; ctx.strokeRect(mx,my,mw,mh);
-    const progress=KP.Utils.clamp(game.player.x/game.world.worldW,0,1);
-    ctx.fillStyle='rgba(180,0,0,.45)'; ctx.fillRect(mx,my,mw*progress,mh);
-    ctx.fillStyle='#ff4040'; ctx.beginPath(); ctx.arc(mx+mw*progress,my+mh/2,5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#ffd21c'; ctx.font='bold 11px Arial';
-    ctx.fillText(`${game.world.biomeName()} ${game.levelIndex+1}/6`,mx,my-4);
 
-    // --- ROW 6: abilities + version ---
-    const ability=(KP.Balance.abilityUnlocks||[]).filter(a=>p.abilities[a.id]).map(a=>a.name).slice(-2).join(' · ');
-    ctx.fillStyle='#888'; ctx.font='11px Arial';
-    ctx.fillText(ability||'способности открываются',x+6,y+142);
-    ctx.fillStyle='rgba(255,210,28,.6)'; ctx.font='bold 10px Arial';
-    ctx.fillText(KP.VERSION||'V 1.1.0',x+252,y+142);
+    // === ROW 2: secondary bar, 55–82px ===
+    ctx.fillStyle='rgba(6,5,3,.72)';
+    ctx.fillRect(0,55,1024,28);
+    ctx.strokeStyle='rgba(100,80,10,.4)';
+    ctx.lineWidth=1; ctx.strokeRect(0,83,1024,0);
 
-    // Dodge cooldown pip
+    // XP bar
+    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(8,59,210,14);
+    ctx.fillStyle='#7ad62a'; ctx.fillRect(8,59,210*(p.xp/p.xpNext),14);
+    ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fillRect(8,59,210*(p.xp/p.xpNext),5);
+    ctx.fillStyle='#9df542'; ctx.font='bold 11px Arial';
+    ctx.fillText(`XP  ${p.xp}/${p.xpNext}`,10,79);
+
+    // Dodge cooldown
     const dc=KP.Balance.player.dodge;
-    if(p.dodgeCd>0){
-      ctx.fillStyle='rgba(100,220,255,.35)';
-      ctx.fillRect(x+6,y+148,Math.round(314*(1-p.dodgeCd/dc.cooldown)),6);
-      ctx.fillStyle='rgba(0,0,0,.5)'; ctx.font='10px Arial';
-      ctx.fillText('ПЕРЕКАТ',x+6,y+162);
-    } else {
-      ctx.fillStyle='rgba(100,220,255,.8)'; ctx.font='bold 10px Arial';
-      ctx.fillText('ПЕРЕКАТ ГТВ',x+6,y+162);
+    const dodgeReady=p.dodgeCd<=0;
+    ctx.fillStyle=dodgeReady?'rgba(60,210,255,.18)':'rgba(30,100,140,.18)';
+    ctx.fillRect(232,59,180,14);
+    if(!dodgeReady){
+      ctx.fillStyle='rgba(60,180,255,.4)';
+      ctx.fillRect(232,59,180*(1-p.dodgeCd/dc.cooldown),14);
     }
+    ctx.strokeStyle=dodgeReady?'rgba(60,210,255,.6)':'rgba(40,120,160,.3)';
+    ctx.lineWidth=1; ctx.strokeRect(232,59,180,14);
+    ctx.fillStyle=dodgeReady?'#65e8ff':'#5599aa'; ctx.font=dodgeReady?'bold 11px Arial':'11px Arial';
+    ctx.fillText(dodgeReady?'ПЕРЕКАТ ГТВ':'ПЕРЕКАТ...',234,79);
 
-    // --- COMBO display ---
+    // Abilities
+    const ability=(KP.Balance.abilityUnlocks||[]).filter(a=>p.abilities[a.id]).map(a=>a.name).slice(-3).join(' · ');
+    ctx.fillStyle='#555'; ctx.font='10px Arial';
+    ctx.fillText(ability,426,79);
+
+    // Minimap
+    const mx=680, my=57, mw=284, mh=18;
+    ctx.fillStyle='#070606'; ctx.fillRect(mx,my,mw,mh);
+    ctx.strokeStyle='rgba(200,160,20,.4)'; ctx.lineWidth=1; ctx.strokeRect(mx,my,mw,mh);
+    const progress=U.clamp(game.player.x/game.world.worldW,0,1);
+    ctx.fillStyle='rgba(160,0,0,.5)'; ctx.fillRect(mx,my,mw*progress,mh);
+    ctx.fillStyle='#ff4040'; ctx.beginPath(); ctx.arc(mx+mw*progress,my+mh/2,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#888'; ctx.font='10px Arial';
+    ctx.fillText(`${game.world.biomeName()} ${game.levelIndex+1}/6`,mx+2,my-3);
+    ctx.fillStyle='rgba(255,210,28,.5)'; ctx.font='bold 10px Arial';
+    ctx.fillText(KP.VERSION||'V 1.1.0',976,79);
+
+    // === COMBO (left, below HUD strip) ===
     if(game.comboCount>=4){
       const mulStr=`КОМБО ×${game.comboMul.toFixed(1)}`;
-      const pulse=0.85+Math.sin(Date.now()/80)*0.15;
-      ctx.save();
-      ctx.globalAlpha=pulse;
+      const pulse=0.88+Math.sin(Date.now()/80)*0.12;
+      ctx.save(); ctx.globalAlpha=pulse;
       ctx.fillStyle=game.comboMul>=3?'#ff4400':game.comboMul>=2?'#ff8800':'#ffd21c';
-      ctx.font=`bold ${game.comboMul>=3?22:18}px Arial`;
-      ctx.strokeStyle='#000'; ctx.lineWidth=3;
-      ctx.strokeText(mulStr,26,80);
-      ctx.fillText(mulStr,26,80);
-      // Combo pips
+      const sz=game.comboMul>=3?24:20;
+      ctx.font=`bold ${sz}px Arial`; ctx.strokeStyle='#000'; ctx.lineWidth=4;
+      ctx.strokeText(mulStr,14,122); ctx.fillText(mulStr,14,122);
       const pips=Math.min(game.comboCount,14);
       for(let i=0;i<pips;i++){
         ctx.fillStyle=i<4?'#ffd21c':i<8?'#ff8800':'#ff4400';
-        ctx.fillRect(26+i*14,84,11,5);
+        ctx.fillRect(14+i*14,126,11,5);
       }
       ctx.restore();
     }
 
-    // --- BOSS health bar (top-center) ---
+    // === BOSS HP BAR (below HUD, y=88) ===
     const boss=game.enemies.find(e=>e.alive&&KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss');
     if(boss){
-      const bx=250, by=10, bw=524, bh=22;
-      ctx.fillStyle='rgba(0,0,0,.85)'; ctx.fillRect(bx-4,by-4,bw+8,bh+24);
-      ctx.strokeStyle=boss.phase2?'#ff4040':'#ffd21c'; ctx.lineWidth=2; ctx.strokeRect(bx-4,by-4,bw+8,bh+24);
-      ctx.fillStyle=boss.phase2?'#cc0000':'#aa3300';
-      ctx.fillRect(bx,by,bw,bh);
+      const bbx=200, bby=89, bbw=624, bbh=20;
+      ctx.fillStyle='rgba(0,0,0,.82)'; ctx.fillRect(bbx-4,bby-4,bbw+8,bbh+16);
+      ctx.strokeStyle=boss.phase2?'#ff4040':'#ffd21c'; ctx.lineWidth=2; ctx.strokeRect(bbx-4,bby-4,bbw+8,bbh+16);
+      ctx.fillStyle=boss.phase2?'#cc0000':'#882200'; ctx.fillRect(bbx,bby,bbw,bbh);
       ctx.fillStyle=boss.phase2?'#ff2200':'#ff5500';
-      ctx.fillRect(bx,by,bw*KP.Utils.clamp(boss.hp/boss.maxHp,0,1),bh);
-      // Shine
-      ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(bx,by,bw*KP.Utils.clamp(boss.hp/boss.maxHp,0,1),bh/3);
-      ctx.fillStyle=boss.phase2?'#ff8888':'#ffddaa'; ctx.font='bold 12px Arial'; ctx.textAlign='center';
+      ctx.fillRect(bbx,bby,bbw*U.clamp(boss.hp/boss.maxHp,0,1),bbh);
+      ctx.fillStyle='rgba(255,255,255,.14)';
+      ctx.fillRect(bbx,bby,bbw*U.clamp(boss.hp/boss.maxHp,0,1),bbh/3);
       const bossName={mushroomBoss:'ГРИБ-БОСС',treeBoss:'ДЕРЕВО-БОСС',sandBoss:'ПЕСОЧНЫЙ БОСС',swampBoss:'БОЛОТНЫЙ БОСС',factoryBoss:'ЗАВОД-БОСС',lenin:'ЛЕНИН'}[boss.kind]||boss.kind.toUpperCase();
-      ctx.fillText(`${bossName}  ${Math.max(0,Math.round(boss.hp))}/${boss.maxHp}${boss.phase2?' ⚡ ФАЗА 2':''}`,bx+bw/2,by+16);
+      ctx.fillStyle=boss.phase2?'#ff9999':'#ffddaa'; ctx.font='bold 13px Arial'; ctx.textAlign='center';
+      ctx.fillText(`${bossName}  ${Math.max(0,Math.round(boss.hp))} / ${boss.maxHp}${boss.phase2?'  ⚡ ФАЗА 2':''}`,bbx+bbw/2,bby+14);
       ctx.textAlign='left';
     }
 
-    // --- Toast ---
+    // === TOAST (bottom strip) ===
     if(game.toastTimer>0){
       const alpha=Math.min(1,game.toastTimer/30);
-      ctx.fillStyle=`rgba(0,0,0,${0.82*alpha})`;
-      ctx.fillRect(16,514,860,36);
-      ctx.strokeStyle=`rgba(180,140,20,${0.6*alpha})`; ctx.lineWidth=1;
-      ctx.strokeRect(16,514,860,36);
+      ctx.fillStyle=`rgba(0,0,0,${0.85*alpha})`;
+      ctx.fillRect(0,554,1024,22);
+      ctx.strokeStyle=`rgba(160,120,14,${0.5*alpha})`; ctx.lineWidth=1;
+      ctx.strokeRect(0,554,1024,22);
       ctx.globalAlpha=alpha;
-      ctx.fillStyle='#ffd21c'; ctx.font='14px Arial';
-      // Truncate toast if too long
-      const txt=game.toastText.length>100?game.toastText.slice(0,97)+'…':game.toastText;
-      ctx.fillText(txt,34,537);
+      ctx.fillStyle='#ffd21c'; ctx.font='13px Arial';
+      const txt=game.toastText.length>112?game.toastText.slice(0,109)+'…':game.toastText;
+      ctx.fillText(txt,12,569);
       ctx.globalAlpha=1;
     }
 
-    // Time-stop overlay text
+    // Time-stop overlay
     if(game.timeStopFrames>0){
-      ctx.fillStyle='rgba(101,232,255,.92)'; ctx.font='bold 18px Arial';
-      ctx.fillText(`ВРЕМЯ СТОИТ: ${Math.ceil(game.timeStopFrames/60)}с`,26,34);
+      ctx.fillStyle='rgba(101,232,255,.9)'; ctx.font='bold 18px Arial';
+      ctx.fillText(`ВРЕМЯ СТОИТ: ${Math.ceil(game.timeStopFrames/60)}с`,14,120);
     }
   }
 
