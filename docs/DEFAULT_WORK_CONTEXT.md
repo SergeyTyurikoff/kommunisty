@@ -1,6 +1,6 @@
 # Default Work Context
 
-Version: `V 1.0.18`
+Version: `V 1.2.0`
 
 Project shape:
 - Static browser game on plain HTML/CSS/JS.

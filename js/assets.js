@@ -20,6 +20,7 @@ KP.Assets = class Assets {
       lenin:'img/sliced/bosses/lenin_boss.png',
 
       shop:'img/shop.svg',
+      menuPoster:'img/menu_poster_v1018.png',
       forestBg:'img/backgrounds/forest.jpg',
       winterBg:'img/backgrounds/winter.jpg',
       desertBg:'img/backgrounds/desert.jpg',
@@ -61,74 +62,143 @@ KP.Assets = class Assets {
     return true;
   }
 
-  drawHero(ctx,x,y,pose,facing,weapon){
+  _withFacing(ctx,x,y,w,facing,fn){
+    ctx.save();
+    if(facing<0){ ctx.translate(x+w,y); ctx.scale(-1,1); ctx.translate(-x,-y); }
+    fn();
+    ctx.restore();
+  }
+
+  _actorTransform(ctx,actor,bob=0,lean=0,alpha=1){
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.translate(actor.x+actor.w/2,actor.y+actor.h);
+    ctx.rotate(lean);
+    ctx.translate(-(actor.x+actor.w/2),-(actor.y+actor.h+bob));
+  }
+
+  _drawWalkerLegs(ctx,x,y,width,phase,airborne=false,primary='#1a1a1a',secondary='#0d0d0d'){
+    const stride=airborne?0:Math.sin(phase)*4.6;
+    const lift=airborne?5:Math.max(0,Math.cos(phase))*2.2;
+    ctx.fillStyle=primary;
+    ctx.fillRect(x+7,y+47-lift,7,12+lift);
+    ctx.fillRect(x+19,y+47+lift*.2,7,12);
+    ctx.fillStyle=secondary;
+    ctx.fillRect(x+7+stride*0.28,y+56-lift*.35,9,4);
+    ctx.fillRect(x+19-stride*0.28,y+56+lift*.1,9,4);
+  }
+
+  _drawMuzzleFlash(ctx,x,y,size,color='#ffd21c'){
+    ctx.save();
+    ctx.globalAlpha=.8;
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x+size,y-size*.34);
+    ctx.lineTo(x+size*.75,y);
+    ctx.lineTo(x+size,y+size*.34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  drawHero(ctx,player){
+    const x=player.x, y=player.y, facing=player.facing, weapon=player.weapon;
+    const phase=performance.now()/110+player.x*.025;
+    const airborne=!player.grounded;
+    const running=player.pose==='run';
+    const bob=player.dead?0:(running?Math.abs(Math.sin(phase))*2.2:airborne?-2.5:0);
+    const lean=player.dead?-0.85*facing:player.dodgeTimer>0?-0.45*facing:running?Math.sin(phase)*0.06:airborne?(player.vy<0?-0.07:0.11):player.attackFlash>0?0.05*facing:0;
     const heroW=36, heroH=52;
+    ctx.fillStyle='rgba(0,0,0,.24)';
+    ctx.beginPath();
+    ctx.ellipse(x+17,y+58,17,5,0,0,Math.PI*2);
+    ctx.fill();
+    this._actorTransform(ctx,player,bob,lean,player.dead?0.72:1);
+    this._drawWalkerLegs(ctx,x,y,player.w,phase,airborne,'#1a1a1a','#070707');
     const drew=this.drawImg(ctx,'hero',x-2,y+3,heroW,heroH,facing<0);
     if(!drew){
-      ctx.save(); ctx.translate(x,y);
-      if(facing<0){ ctx.translate(34,0); ctx.scale(-1,1); }
+      this._withFacing(ctx,x,y,34,facing,()=>{
       ctx.fillStyle='#211714'; ctx.fillRect(6,18,22,32);
       ctx.fillStyle='#d6b18f'; ctx.fillRect(9,2,17,17);
       ctx.fillStyle='#151515'; ctx.fillRect(6,-3,22,7);
       ctx.fillStyle='#111'; ctx.fillRect(13,8,3,3); ctx.fillRect(23,8,3,3);
       ctx.fillStyle='#7b4b20'; ctx.fillRect(7,37,21,4);
-      ctx.fillStyle='#111'; ctx.fillRect(8,50,7,8); ctx.fillRect(21,50,7,8);
-      ctx.restore();
+      });
     }
-    ctx.save();
-    if(facing<0){ ctx.translate(x+34,y); ctx.scale(-1,1); ctx.translate(-x,-y); }
-    ctx.fillStyle='#d2a47f'; ctx.fillRect(x+12,y+8,14,11);
-    ctx.fillStyle='#111'; ctx.fillRect(x+14,y+12,3,2); ctx.fillRect(x+23,y+12,3,2);
-    ctx.fillStyle='#fff0c7'; ctx.fillRect(x+25,y+17,10,2);
-    ctx.fillStyle='#ff5b1a'; ctx.beginPath(); ctx.arc(x+36,y+18,2.1,0,Math.PI*2); ctx.fill();
+    this._withFacing(ctx,x,y,34,facing,()=>{
+      ctx.fillStyle='#d2a47f'; ctx.fillRect(x+12,y+8,14,11);
+      ctx.fillStyle='#111'; ctx.fillRect(x+14,y+12,3,2); ctx.fillRect(x+23,y+12,3,2);
+      ctx.fillStyle='#5a2d13'; ctx.fillRect(x+14,y+17,8,2);
+      ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(x+10,y+5,10,3);
+    });
+    this.drawWeapon(ctx,{x,y,w:player.w,h:player.h,facing,attackFlash:player.attackFlash,pose:player.pose,grounded:player.grounded,vx:player.vx,vy:player.vy},weapon);
     ctx.restore();
-    this.drawWeapon(ctx,x,y,facing,weapon);
   }
 
-  drawWeapon(ctx,x,y,facing,weapon){
+  drawWeapon(ctx,actor,weapon){
     const map={pistol:'pistolWeapon',mosin:'mosinWeapon',smg:'smgWeapon',flamethrower:'flamethrowerWeapon',sabre:'sabreWeapon',shotgun:'shotgunWeapon'};
     const sizes={pistol:[34,20],mosin:[70,22],smg:[58,23],flamethrower:[68,27],sabre:[54,18],shotgun:[54,23]};
     const id=map[weapon]||'mosinWeapon';
     const [ww,hh]=sizes[weapon]||sizes.mosin;
+    const {x,y,facing,attackFlash=0,pose='stand',grounded=true,vx=0}=actor;
+    const phase=performance.now()/110+x*.025;
+    const recoil=attackFlash>0?Math.min(6,attackFlash)*.8:0;
+    const angle=pose==='dodge'?-0.28*facing:!grounded?(weapon==='sabre'?-0.35:-(0.12+Math.abs(vx)*0.01)):pose==='run'?Math.sin(phase)*0.07:attackFlash>0?-0.08:0;
     ctx.save();
     if(facing<0){ ctx.translate(x+16,y+28); ctx.scale(-1,1); }
     else ctx.translate(x+18,y+28);
+    ctx.rotate(angle);
+    ctx.translate(-recoil,pose==='run'?Math.sin(phase)*1.4:0);
     if(!this.drawImg(ctx,id,0,-hh/2,ww,hh,false)){
       ctx.fillStyle=weapon==='sabre'?'#d8f2ff':weapon==='flamethrower'?'#ff5b1a':'#6b3e1d';
       ctx.fillRect(0,-3,ww,6);
       ctx.fillStyle='#111'; ctx.fillRect(ww-12,-5,15,4);
     }
+    if(attackFlash>0&&weapon!=='sabre') this._drawMuzzleFlash(ctx,ww-2,-1,10,weapon==='flamethrower'?'#ff7a22':'#ffd21c');
     ctx.restore();
   }
 
   drawEnemy(ctx,e){
-    if(['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss'].includes(e.kind)) return this.drawBiomeBoss(ctx,e);
-    if(e.kind==='lenin')    return this.drawLenin(ctx,e);
-    if(e.kind==='kamikaze') return this.drawKamikaze(ctx,e);
-    if(e.kind==='shielder') return this.drawShielder(ctx,e);
-    if(e.kind==='sniper')   return this.drawSniper(ctx,e);
-    if(e.kind==='horse'){
-      if(this.drawImg(ctx,'horse',e.x-6,e.y+4,78,52,e.facing<0)) return;
+    const phase=performance.now()/120+e.x*.018;
+    const airborne=!e.grounded;
+    const moving=e.alive&&Math.abs(e.vx)>0.55;
+    const bob=e.alive?(moving?Math.abs(Math.sin(phase))*2.1:airborne?-2:0):0;
+    const deathPhase=e.deathTimer>0?1-e.deathTimer/28:0;
+    const lean=e.alive?(e.rollTimer>0?-0.5*e.facing:moving?Math.sin(phase)*0.07:0):(-0.85*e.facing*deathPhase);
+    const alpha=e.alive?1:Math.max(.25,e.deathTimer/28);
+    this._actorTransform(ctx,e,bob,lean,alpha);
+    if(!['horse','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'].includes(e.kind)) this._drawWalkerLegs(ctx,e.x,e.y,e.w,phase,airborne,'#232323','#101010');
+    let usedArt=false;
+    if(['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss'].includes(e.kind)){ this.drawBiomeBoss(ctx,e); usedArt=true; }
+    else if(e.kind==='lenin'){ this.drawLenin(ctx,e); usedArt=true; }
+    else if(e.kind==='kamikaze'){ this.drawKamikaze(ctx,e); usedArt=true; }
+    else if(e.kind==='shielder'){ this.drawShielder(ctx,e); usedArt=true; }
+    else if(e.kind==='sniper'){ this.drawSniper(ctx,e); usedArt=true; }
+    else if(e.kind==='horse'){
+      usedArt=this.drawImg(ctx,'horse',e.x-6,e.y+4,78,52,e.facing<0);
     } else {
       const id=e.kind==='gunner'?'gunner':e.kind==='pistol'?'pistol':e.kind==='miniboss'?'miniboss':'zombie';
       const scale=e.kind==='miniboss'?1.02:0.88;
       const dw=Math.round((e.kind==='gunner'?54:44)*scale);
       const dh=Math.round((e.kind==='miniboss'?62:58)*scale);
-      if(this.drawImg(ctx,id,e.x-3,e.y+(e.h-dh)+2,dw,dh,e.facing<0)){
-        this.drawEnemyWeapon(ctx,e); return;
-      }
+      usedArt=this.drawImg(ctx,id,e.x-3,e.y+(e.h-dh)+2,dw,dh,e.facing<0);
+      if(usedArt) this.drawEnemyWeapon(ctx,e);
     }
-    this.drawFallbackSoldier(ctx,e);
+    if(!usedArt) this.drawFallbackSoldier(ctx,e);
+    if(e.attackFlash>0&&['pistol','gunner','sniper','miniboss','lenin'].includes(e.kind)){
+      this._withFacing(ctx,e.x,e.y,e.w,e.facing,()=>this._drawMuzzleFlash(ctx,e.x+e.w-2,e.y+26,9,e.kind==='sniper'?'#ffee66':'#9dff54'));
+    }
+    ctx.restore();
   }
 
   drawEnemyWeapon(ctx,e){
-    ctx.save();
-    if(e.facing<0){ctx.translate(e.x+e.w,e.y);ctx.scale(-1,1);ctx.translate(-e.x,-e.y);}
-    ctx.fillStyle='#111';
-    if(e.kind==='pistol')   ctx.fillRect(e.x+24,e.y+28,22,5);
-    if(e.kind==='gunner')   ctx.fillRect(e.x+20,e.y+27,42,6);
-    if(e.kind==='miniboss'){ ctx.fillRect(e.x+18,e.y+26,48,7); ctx.fillStyle='#b00000'; ctx.fillRect(e.x+4,e.y-14,36,8); }
-    ctx.restore();
+    this._withFacing(ctx,e.x,e.y,e.w,e.facing,()=>{
+      ctx.fillStyle='#111';
+      if(e.kind==='pistol')   ctx.fillRect(e.x+24,e.y+28,22,5);
+      if(e.kind==='gunner')   ctx.fillRect(e.x+20,e.y+27,42,6);
+      if(e.kind==='miniboss'){ ctx.fillRect(e.x+18,e.y+26,48,7); ctx.fillStyle='#b00000'; ctx.fillRect(e.x+4,e.y-14,36,8); }
+    });
   }
 
   drawFallbackSoldier(ctx,e){

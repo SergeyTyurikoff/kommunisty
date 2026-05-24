@@ -6,6 +6,7 @@ const { chromium } = require('playwright-core');
 const projectRoot = path.resolve(__dirname, '..');
 const serverScript = path.join(projectRoot, 'tools', 'dev_server.js');
 const nodeExe = process.execPath;
+const testPort = 4273;
 const chromeCandidates = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -20,6 +21,7 @@ function startServer(){
   return new Promise((resolve, reject) => {
     const child = spawn(nodeExe, [serverScript], {
       cwd: projectRoot,
+      env: { ...process.env, KP_PORT: String(testPort) },
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let settled = false;
@@ -65,7 +67,7 @@ async function main(){
       if(response.status() >= 400) networkErrors.push(`${response.status()} ${response.url()}`);
     });
 
-    await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+    await page.goto(`http://127.0.0.1:${testPort}/`, { waitUntil: 'networkidle' });
     await wait(1500);
 
     const before = await page.evaluate(() => window.KP_TEST.snapshot());

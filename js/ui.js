@@ -6,6 +6,7 @@ KP.UI = class UI {
     this.intro=true; this.ending=false;
     this.menuItems=['controls','start'];
     this.menuIndex=1; this.controlsOpen=false;
+    this.shopAmmoOpen=false;
   }
 
   draw(game){
@@ -52,22 +53,15 @@ KP.UI = class UI {
     ctx.fillStyle=lowAmmo?'#ff4040':'#999'; ctx.font='13px Arial';
     ctx.fillText(ammoText,62,41);
 
-    // CENTER — TIME bar (wide, color-coded)
-    const timeRatio=U.clamp(p.time/p.maxTime,0,1);
-    const timeColor=timeRatio>0.5?'#00e870':timeRatio>0.25?'#ffcc00':'#ff2200';
-    const timePulse=timeRatio<0.25?(0.7+Math.sin(Date.now()/120)*0.3):1;
-    const bx=280, bw=464, bh=28, by=12;
-    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(bx,by,bw,bh);
-    ctx.globalAlpha=timePulse;
-    ctx.fillStyle=timeColor; ctx.fillRect(bx,by,bw*timeRatio,bh);
-    ctx.fillStyle='rgba(255,255,255,.13)'; ctx.fillRect(bx,by,bw*timeRatio,bh/3);
-    ctx.globalAlpha=1;
-    ctx.strokeStyle=timeRatio<0.25?`rgba(255,50,50,${timePulse})`:'rgba(255,255,255,.18)';
-    ctx.lineWidth=1.5; ctx.strokeRect(bx,by,bw,bh);
-    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='bold 13px Arial'; ctx.textAlign='center';
-    ctx.fillText('ВРЕМЯ',bx+44,by+19);
-    ctx.fillStyle='#fff'; ctx.font='bold 14px Arial';
-    ctx.fillText(`${Math.round(p.time)} / ${p.maxTime}`,bx+bw*0.62,by+19);
+    // CENTER — mission status instead of player HP/time bar
+    const bossAlive=game.enemies.some(e=>e.alive&&KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss');
+    const missionText=game.levelTransition>0?'Переход между биомами':
+      bossAlive?'Цель: добить босса и открыть выход':
+      'Цель: зачистить путь и дойти до портала';
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(280,12,358,28);
+    ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=1.5; ctx.strokeRect(280,12,358,28);
+    ctx.fillStyle='#f2f2f2'; ctx.font='bold 14px Arial'; ctx.textAlign='center';
+    ctx.fillText(missionText,459,31);
     ctx.textAlign='left';
 
     // RIGHT — money, level badge, kills, turbo
@@ -128,7 +122,7 @@ KP.UI = class UI {
     ctx.fillStyle='#888'; ctx.font='10px Arial';
     ctx.fillText(`${game.world.biomeName()} ${game.levelIndex+1}/6`,mx+2,my-3);
     ctx.fillStyle='rgba(255,210,28,.5)'; ctx.font='bold 10px Arial';
-    ctx.fillText(KP.VERSION||'V 1.1.0',976,79);
+    ctx.fillText(KP.VERSION||'V 1.2.0',976,79);
 
     // === COMBO (left, below HUD strip) ===
     if(game.comboCount>=4){
@@ -195,7 +189,7 @@ KP.UI = class UI {
 
     const items=[
       ['1','time',   `Купить время +${KP.Balance.shop.timeAmount}`,KP.Balance.shop.timePrice,'жизненно важный ресурс'],
-      ['2','ammo',   'Боеприпасы к текущему оружию',(()=>{ const w=KP.Balance.weapons[game.player.weapon]; const at=w.ammoType||'rifle'; return KP.Balance.ammoTypes[at].price; })(),'нужный тип патронов'],
+      ['2','ammo',   'Боеприпасы: выбрать тип',10,'под любое оружие из инвентаря'],
       ['3','smg',    'Пулемёт',                     KP.Balance.weapons.smg.price,           KP.Balance.weapons.smg.desc],
       ['4','flamethrower','Огнемёт',                KP.Balance.weapons.flamethrower.price,  KP.Balance.weapons.flamethrower.desc],
       ['5','sabre',  'Шашка',                       KP.Balance.weapons.sabre.price,         KP.Balance.weapons.sabre.desc],
@@ -215,7 +209,29 @@ KP.UI = class UI {
       ctx.font='15px Arial'; yy+=52;
     }
     ctx.fillStyle='#888'; ctx.font='14px Arial';
-    ctx.fillText('E / Esc — закрыть.',230,462);
+    ctx.fillText(this.shopAmmoOpen?'1-6 — купить тип | E / Esc — назад':'E / Esc — закрыть.  2 — выбрать тип патронов',230,462);
+    if(this.shopAmmoOpen){
+      const options=game.getShopAmmoOptions();
+      ctx.fillStyle='rgba(8,8,8,.94)'; ctx.fillRect(520,164,272,220);
+      ctx.strokeStyle='rgba(255,210,28,.48)'; ctx.lineWidth=2; ctx.strokeRect(520,164,272,220);
+      ctx.fillStyle='#ffd21c'; ctx.font='bold 18px Arial'; ctx.fillText('ТИП БОЕПРИПАСОВ',540,192);
+      let sy=224;
+      options.forEach((opt,idx)=>{
+        const amount=game.player.ammoBag[opt.id];
+        const max=game.player.maxAmmoBag[opt.id];
+        ctx.fillStyle='rgba(30,22,10,.9)'; ctx.fillRect(538,sy-18,236,32);
+        ctx.strokeStyle='rgba(180,140,20,.25)'; ctx.strokeRect(538,sy-18,236,32);
+        ctx.fillStyle='#f2f2f2'; ctx.font='14px Arial';
+        ctx.fillText(`${idx+1}  ${opt.name}  +${opt.buyAmount}`,550,sy);
+        ctx.fillStyle='#9ec8ff'; ctx.fillText(`${amount}/${max}`,704,sy);
+        ctx.fillStyle='#888'; ctx.fillText(`${opt.price} мон.`,550,sy+14);
+        sy+=38;
+      });
+      if(!options.length){
+        ctx.fillStyle='#bbb'; ctx.font='14px Arial';
+        ctx.fillText('Нет оружия с боеприпасами.',540,232);
+      }
+    }
   }
 
   inventory(ctx,game){
@@ -250,7 +266,7 @@ KP.UI = class UI {
     botFade.addColorStop(0,'rgba(0,0,0,0)'); botFade.addColorStop(1,'rgba(0,0,0,.78)');
     ctx.fillStyle=botFade; ctx.fillRect(0,360,1024,216);
 
-    ctx.fillStyle='#ffd21c'; ctx.font='bold 18px Arial'; ctx.fillText(KP.VERSION||'V 1.1.0',46,48);
+    ctx.fillStyle='#ffd21c'; ctx.font='bold 18px Arial'; ctx.fillText(KP.VERSION||'V 1.2.0',46,48);
     ctx.font='bold 44px Arial'; ctx.fillText('КОММУНИСТЫ',42,98); ctx.fillText('ПРОТИВ... ПЛЕСЕНИ!',42,144);
     ctx.fillStyle='#f2dfc7'; ctx.font='18px Arial'; ctx.fillText('Главное меню операции',46,178);
 

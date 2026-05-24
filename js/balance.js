@@ -20,7 +20,7 @@ KP.Balance = {
     drainRange:160,
     drainGainPerFrame:.26,
     drainEnemyDamagePerFrame:.24,
-    dodge:{ cost:8, duration:14, cooldown:58, speed:10.5 },
+    dodge:{ cost:8, duration:14, cooldown:58, speed:10.5, hitDmg:18, knock:10 },
     combo:{ window:130, thresholds:[1,4,8,14], multipliers:[1, 1.5, 2.2, 3.5] }
   },
   abilityUnlocks:[

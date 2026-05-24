@@ -1,6 +1,6 @@
 'use strict';
 window.KP = window.KP || {};
-KP.VERSION = 'V 1.1.0';
+KP.VERSION = 'V 1.2.0';
 KP.Game = class Game {
   constructor(){
     this.canvas=document.getElementById('game');
@@ -21,6 +21,7 @@ KP.Game = class Game {
     this.timeStopFrames=0; this.levelTransition=0;
     this.paused=false; this.deathStats=null;
     this.combatPressure=0;
+    this.frameId=0;
     // Combo system
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.spawnLevel();
@@ -74,6 +75,7 @@ KP.Game = class Game {
   }
 
   update(){
+    this.frameId++;
     if(this.input.wasPressed('restart')){ this.restart(); return; }
     if(this.ui.intro){ this.updateIntroMenu(); return; }
     if(this.ui.ending||this.player.dead){
@@ -116,6 +118,7 @@ KP.Game = class Game {
     }
 
     this.player.update(this);
+    this.updateDodgeCollisions();
     this.updateCamera();
     this.checkPortal();
     this.checkRush();
@@ -141,6 +144,7 @@ KP.Game = class Game {
 
   startGame(){
     this.ui.intro=false; this.ui.controlsOpen=false;
+    this.ui.shopAmmoOpen=false;
     this.audio.play('menuStart',1);
     this.audio.playMusic(true);
     this.toast('Операция началась. Музыка включена, плесень предупреждена.');
@@ -177,6 +181,7 @@ KP.Game = class Game {
     this.combatPressure=0;
     this.ui.intro=true; this.ui.ending=false;
     this.ui.shopOpen=null; this.ui.inventoryOpen=false;
+    this.ui.shopAmmoOpen=false;
     this.ui.menuIndex=1; this.ui.controlsOpen=false;
     this.timeStopFrames=0; this.levelTransition=0;
     this.cameraX=0; this.cameraY=0;
@@ -194,6 +199,7 @@ KP.Game = class Game {
     this.player.vx=0; this.player.vy=0;
     this.player.jumpsLeft=this.player.abilities.doubleJump?2:1;
     this.cameraX=0; this.cameraY=0; this.timeStopFrames=0;
+    this.ui.shopAmmoOpen=false;
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.spawnLevel();
     this.audio.play('portal',1);
@@ -247,7 +253,7 @@ KP.Game = class Game {
       return;
     }
     for(const e of this.enemies) if(this.visible(e,1000,500)) e.update(this);
-    this.enemies=this.enemies.filter(e=>e.alive);
+    this.enemies=this.enemies.filter(e=>e.alive||e.deathTimer>0);
   }
 
   resolveEntityCollisions(){
@@ -361,7 +367,7 @@ KP.Game = class Game {
 
   interact(){
     for(const s of this.world.shops) if(KP.Utils.near(this.player,s,125,130)){
-      this.ui.shopOpen=s; this.toast('Магазин открыт. Снабженец снова на смене.'); return true;
+      this.ui.shopOpen=s; this.ui.shopAmmoOpen=false; this.toast('Магазин открыт. Снабженец снова на смене.'); return true;
     }
     for(const c of this.world.chests) if(!c.open&&KP.Utils.near(this.player,c,90,95)){
       c.open=true; this.openChest(c); return false;
@@ -376,21 +382,55 @@ KP.Game = class Game {
     else { if(!this.player.inventory.includes(c.loot)) this.player.inventory.push(c.loot); this.toast('Найдено оружие: '+KP.Balance.weapons[c.loot].name); }
   }
 
+  getShopAmmoOptions(){
+    const seen=new Set();
+    const order=['pistol','rifle','machinegun','shells','fuel'];
+    const current=KP.Balance.weapons[this.player.weapon]&&KP.Balance.weapons[this.player.weapon].ammoType;
+    if(current) seen.add(current);
+    for(const id of this.player.inventory){
+      const at=KP.Balance.weapons[id]&&KP.Balance.weapons[id].ammoType;
+      if(at) seen.add(at);
+    }
+    return order.filter(id=>seen.has(id)).map(id=>({id,...KP.Balance.ammoTypes[id]}));
+  }
+
+  buyAmmoType(ammoType){
+    const meta=KP.Balance.ammoTypes[ammoType];
+    if(!meta) return;
+    if(this.player.money<meta.price){ this.toast('Не хватает денег. Даже плесень богаче.'); return; }
+    this.player.money-=meta.price;
+    this.player.addAmmo(ammoType,meta.buyAmount);
+    this.toast(`Куплены ${meta.name} патроны: +${meta.buyAmount}.`);
+  }
+
   shopInput(){
-    if(this.input.wasPressed('interact')||this.input.wasPressed('esc')){ this.ui.shopOpen=null; return; }
+    if(this.input.wasPressed('interact')||this.input.wasPressed('esc')){
+      if(this.ui.shopAmmoOpen){ this.ui.shopAmmoOpen=false; return; }
+      this.ui.shopOpen=null; return;
+    }
     const buy=(id,cost)=>{
       if(this.player.money<cost) return this.toast('Не хватает денег. Даже плесень богаче.');
       this.player.money-=cost;
       if(id==='time') this.player.time=KP.Utils.clamp(this.player.time+KP.Balance.shop.timeAmount,0,this.player.maxTime);
-      else if(id==='ammo'){
-        const w=KP.Balance.weapons[this.player.weapon];
-        const at=w.ammoType||'rifle';
-        this.player.addAmmo(at,KP.Balance.ammoTypes[at].buyAmount);
-      } else if(!this.player.inventory.includes(id)) this.player.inventory.push(id);
+      else if(!this.player.inventory.includes(id)) this.player.inventory.push(id);
       this.toast(id==='time'?`+${KP.Balance.shop.timeAmount} времени`:id==='ammo'?'боеприпасы куплены':'Куплено: '+KP.Balance.weapons[id].name);
     };
+    if(this.ui.shopAmmoOpen){
+      const options=this.getShopAmmoOptions();
+      const keys=['one','two','three','four','five','six'];
+      for(let i=0;i<keys.length;i++) if(this.input.wasPressed(keys[i])&&options[i]){
+        this.buyAmmoType(options[i].id);
+        return;
+      }
+      return;
+    }
     if(this.input.wasPressed('one')) buy('time',KP.Balance.shop.timePrice);
-    if(this.input.wasPressed('two')){ const w=KP.Balance.weapons[this.player.weapon]; const at=w.ammoType||'rifle'; buy('ammo',KP.Balance.ammoTypes[at].price); }
+    if(this.input.wasPressed('two')){
+      const options=this.getShopAmmoOptions();
+      if(!options.length){ this.toast('Нет оружия, под которое можно купить патроны.'); return; }
+      this.ui.shopAmmoOpen=true;
+      this.toast('Выбери тип патронов цифрой 1–6.');
+    }
     if(this.input.wasPressed('three')) buy('smg',KP.Balance.weapons.smg.price);
     if(this.input.wasPressed('four')) buy('flamethrower',KP.Balance.weapons.flamethrower.price);
     if(this.input.wasPressed('five')) buy('sabre',KP.Balance.weapons.sabre.price);
@@ -399,6 +439,21 @@ KP.Game = class Game {
 
   burst(x,y,color,count){
     for(let i=0;i<count;i++) this.particles.push(new KP.Particle(x,y,color));
+  }
+
+  updateDodgeCollisions(){
+    if(this.player.dodgeTimer<=0) return;
+    const cfg=KP.Balance.player.dodge;
+    for(const e of this.enemies){
+      if(!e.alive||!KP.Utils.rects(this.player,e)) continue;
+      if(e.lastDodgeSerial===this.player.dodgeSerial) continue;
+      e.lastDodgeSerial=this.player.dodgeSerial;
+      e.takeDamage(cfg.hitDmg,cfg.knock,this.player.x,{targetX:this.player.x+this.player.w/2},this);
+      this.registerHit(cfg.hitDmg);
+      this.damageNumbers.push(new KP.DamageNumber(e.x+e.w/2,e.y,cfg.hitDmg,false));
+      this.burst(e.x+e.w/2,e.y+e.h/2,'#a8ecff',14);
+      this.onEnemyHit(e,true,cfg.hitDmg);
+    }
   }
 
   toast(t){ this.toastText=t; this.toastTimer=200; }
@@ -457,7 +512,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       const safe=KP.Utils.clamp(index|0,0,max);
       game.levelIndex=safe; game.world=new KP.World(safe);
       game.player.x=80; game.player.y=380; game.player.dead=false;
-      game.ui.ending=false; game.ui.shopOpen=null; game.ui.inventoryOpen=false;
+      game.ui.ending=false; game.ui.shopOpen=null; game.ui.shopAmmoOpen=false; game.ui.inventoryOpen=false;
       game.timeStopFrames=0; game.levelTransition=0;
       game.spawnLevel(); placePlayerNearGround(); return safe;
     },

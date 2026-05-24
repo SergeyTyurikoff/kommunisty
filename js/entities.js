@@ -211,6 +211,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       patrolMin:0,patrolMax:99999,floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,
       laneBias:U.rand(-28,28),strafeBias:Math.random()<.5?-1:1,
       burstCd:55+Math.random()*70,burstTimer:0,underFireTimer:0,
+      strafeTimer:24+Math.random()*40|0,attackFlash:0,deathTimer:0,lastDodgeSerial:-1,
       phase2:false,phase2Triggered:false,
       // Per-enemy abilities
       rollTimer:0,   rollCd:  kind==='runner'  ?(55+Math.random()*60|0):9999,
@@ -328,7 +329,12 @@ KP.Enemy = class Enemy extends KP.Entity {
       const cfg=KP.Balance.enemies[this.kind];
       if(cfg&&cfg.role==='boss') this._triggerPhase2(game);
     }
-    if(this.hp<=0) this.alive=false;
+    if(this.hp<=0){
+      this.alive=false;
+      this.deathTimer=Math.max(this.deathTimer,28);
+      this.vx+=this.facing*1.8;
+      this.vy=-2.1;
+    }
   }
 
   _triggerPhase2(game){
@@ -349,12 +355,25 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.hp-=KP.Balance.player.drainEnemyDamagePerFrame;
     this.vx*=.72;
     this.memoryTimer=Math.max(this.memoryTimer,90);
-    if(this.hp<=0) this.alive=false;
+    if(this.hp<=0){
+      this.alive=false;
+      this.deathTimer=Math.max(this.deathTimer,24);
+    }
   }
 
   update(game){
     const p=game.player;
     this.timeDrained=false;
+    if(!this.alive){
+      if(this.deathTimer>0){
+        this.deathTimer--;
+        this.vx*=.84;
+        this.vy=Math.min(this.vy+game.gravity*.35,4.4);
+        this.x+=this.vx;
+        this.y=Math.min(this.y+this.vy,(this.floorY||this.y+this.h)-this.h);
+      }
+      return;
+    }
     if(game.timeStopFrames>0) return;
     if(this.hurt>0) this.hurt--;
     if(this.alertTimer>0) this.alertTimer--;
@@ -362,10 +381,16 @@ KP.Enemy = class Enemy extends KP.Entity {
     if(this.jumpCd>0) this.jumpCd--;
     if(this.memoryTimer>0) this.memoryTimer--;
     if(this.underFireTimer>0) this.underFireTimer--;
+    if(this.attackFlash>0) this.attackFlash--;
+    if(this.strafeTimer>0) this.strafeTimer--;
     if(this.burn>0){
       this.burn--; this.hp-=this.burnDps;
       game.burst(this.x+this.w/2,this.y+this.h/2,'#ff5b1a',1);
-      if(this.hp<=0) this.alive=false;
+      if(this.hp<=0){
+        this.alive=false;
+        this.deathTimer=Math.max(this.deathTimer,24);
+        return;
+      }
     }
     if(this.alertTimer<=0&&Math.random()<0.0025&&Math.abs(game.player.x-this.x)<520)
       this.aggro(U.choice(['Где мой паёк?','Не дыши на грибницу.','Кто выключил вечность?','Смена тревожная.']));
@@ -413,14 +438,20 @@ KP.Enemy = class Enemy extends KP.Entity {
       else if(abs<desiredKeep*.82) this.vx-=dir*this.speed*speedMul*.8;
       else if(pressureOk&&abs>this.attackRange*.9) this.vx+=pursueDir*this.speed*speedMul*(sees?1.08:.7);
       else if(pressureOk&&Math.abs(rememberedX-center)>28) this.vx+=pursueDir*this.speed*speedMul*.52;
-      else this.vx+=this.strafeBias*this.speed*speedMul*.12;
+      else {
+        if(this.strafeTimer<=0){
+          this.strafeTimer=26+Math.random()*46|0;
+          this.strafeBias*=-1;
+        }
+        this.vx+=this.strafeBias*this.speed*speedMul*.52;
+      }
       this.shootCd--;
       if(this.shouldCombatJump(p,abs,true,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul);
       const canFire=sees||pressureFromFire||(this.memoryTimer>55&&abs<this.attackRange*.78);
       if(canFire&&abs<this.attackRange&&this.shootCd<=0) this.fire(game,p);
     } else {
       const burst=this.updateBurst(abs);
-      if(pressureOk) this.vx+=pursueDir*this.speed*speedMul*burst*(pressureFromFire?1.18:1);
+      if(pressureOk) this.vx+=pursueDir*this.speed*speedMul*burst*1.35*(pressureFromFire?1.18:1);
       else if(this.memoryTimer>0) this.vx+=pursueDir*this.speed*speedMul*.55;
       if(this.shouldCombatJump(p,abs,false,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul*burst);
     }
@@ -430,7 +461,7 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   runPatrol(speedMul){
-    this.vx+=this.facing*this.speed*speedMul*.18;
+    this.vx+=this.facing*this.speed*speedMul*.52;
     if(Math.random()<.0035) this.facing*=-1;
   }
 
@@ -526,6 +557,7 @@ KP.Enemy = class Enemy extends KP.Entity {
 
   fire(game,p){
     this.shootCd=Math.max(18,Math.round(this.fireDelay*(this.memoryTimer>85?0.92:1)));
+    this.attackFlash=7;
     const c=U.center(this),pc=U.center(p);
     const rawDx=pc.x-c.x,rawDy=pc.y-c.y;
     const travelFrames=Math.min(18,Math.hypot(rawDx,rawDy)/Math.max(1,this.bulletSpeed));

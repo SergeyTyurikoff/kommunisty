@@ -41,9 +41,9 @@ KP.World = class World {
       this.crates.push(new KP.Crate(cx,449));
     }
 
-    this.rushTriggers.push({x:900, done:false,floorY:485,wave:0});
-    this.rushTriggers.push({x:1700,done:false,floorY:485,wave:1});
-    this.rushTriggers.push({x:2400,done:false,floorY:485,wave:2});
+    this.rushTriggers.push({x:1120,done:false,floorY:485,wave:0});
+    this.rushTriggers.push({x:1840,done:false,floorY:485,wave:1});
+    this.rushTriggers.push({x:2520,done:false,floorY:485,wave:2});
     this.portal={x:2960,y:395,w:70,h:90,active:true};
 
     this.buildEnemySpawns([ground,high1,high2,high3,...sky]);
@@ -103,7 +103,7 @@ KP.World = class World {
     o.y+=o.vy;
     for(const p of this.platforms) if(KP.Utils.rects(o,p)){
       const oneWay=p.type==='sky';
-      const droppingCurrent=o instanceof KP.Player&&o.dropTimer>0&&o.dropPlatform===p;
+      const droppingCurrent=o instanceof KP.Player&&o.dropTimer>0&&(o.dropPlatform===p||oneWay);
       if(droppingCurrent) continue;
       if(oneWay){
         if(o.vy>=0&&prevBottom<=p.y+12){ o.y=p.y-o.h; o.grounded=true; o.vy=0; o.floorContact=p; }
@@ -117,6 +117,8 @@ KP.World = class World {
     o.x=KP.Utils.clamp(o.x,0,this.worldW-o.w);
     o.y=KP.Utils.clamp(o.y,0,this.worldH-o.h);
     if(o instanceof KP.Enemy&&o.floorY){
+      const targetY=o.floorY-o.h;
+      if(Math.abs(o.y-targetY)<12&&o.vy>=0){ o.y=targetY; o.vy=0; o.grounded=true; }
       if(o.y>o.floorY-o.h+16||o.y<o.floorY-o.h-90){ o.y=o.floorY-o.h; o.vy=0; o.grounded=true; }
       o.x=KP.Utils.clamp(o.x,o.patrolMin,Math.max(o.patrolMin,o.patrolMax-o.w));
     }

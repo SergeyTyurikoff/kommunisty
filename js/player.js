@@ -17,6 +17,7 @@ KP.Player = class Player extends KP.Entity {
       turbo:0,turboCd:0,weak:0,timeStopCd:0,
       weapon:'mosin',inventory:['pistol','mosin'],
       invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
+      attackFlash:0,dodgeSerial:0,
       // Dodge
       dodgeTimer:0,dodgeCd:0,dodgeVx:0,
       // Combo (tracked at game level but reset on player reset)
@@ -28,6 +29,7 @@ KP.Player = class Player extends KP.Entity {
     const input=game.input, b=KP.Balance.player;
     if(this.invuln>0) this.invuln--;
     if(this.attackCd>0) this.attackCd--;
+    if(this.attackFlash>0) this.attackFlash--;
     if(this.timeStopCd>0) this.timeStopCd--;
     if(this.dropTimer>0) this.dropTimer--;
     if(this.dodgeCd>0) this.dodgeCd--;
@@ -55,6 +57,7 @@ KP.Player = class Player extends KP.Entity {
         const dodgeSpd=b.dodge.speed*(this.abilities.finalResolve?1.25:1);
         this.dodgeTimer=b.dodge.duration;
         this.dodgeCd=b.dodge.cooldown;
+        this.dodgeSerial++;
         this.dodgeVx=(input.isDown('left')?-1:input.isDown('right')?1:this.facing)*dodgeSpd;
         this.time-=b.dodge.cost;
         this.invuln=Math.max(this.invuln,b.dodge.duration);
@@ -80,7 +83,7 @@ KP.Player = class Player extends KP.Entity {
 
     if((input.wasPressed('downAct')||input.isDown('downAct'))&&this.grounded&&this.floorContact&&this.floorContact.type==='sky'){
       this.dropPlatform=this.floorContact;
-      this.dropTimer=60; this.y+=14; this.vy=Math.max(this.vy,3.2);
+      this.dropTimer=60; this.y+=(this.floorContact.h||18)+6; this.vy=Math.max(this.vy,5.2);
       this.grounded=false; this.floorContact=null;
     }
 
@@ -100,6 +103,12 @@ KP.Player = class Player extends KP.Entity {
     this.vy+=game.gravity;
     game.world.collide(this);
     if(this.grounded) this.jumpsLeft=maxJumps;
+    if(this.dead) this.pose='dead';
+    else if(this.dodgeTimer>0) this.pose='dodge';
+    else if(!this.grounded) this.pose=this.vy<0?'jump':'fall';
+    else if(Math.abs(this.vx)>1.25) this.pose='run';
+    else if(this.attackFlash>0) this.pose='shoot';
+    else this.pose='stand';
     this.drainNearbyEnemyTime(game);
     if(this.time<=0){ this.time=0; this.dead=true; }
   }
@@ -174,6 +183,7 @@ KP.Player = class Player extends KP.Entity {
       return;
     }
     this.attackCd=w.delay/16.67;
+    this.attackFlash=8;
     if(ammoType) this.ammoBag[ammoType]-=ammoUse;
     let dmg=w.dmg*this.damageMultiplier()*(game.comboMul||1);
     if(this.abilities.meleeMastery&&w.type==='melee') dmg*=1.35;
@@ -269,6 +279,14 @@ KP.Player = class Player extends KP.Entity {
       ctx.strokeStyle='#65e8ff'; ctx.lineWidth=3;
       ctx.beginPath(); ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2); ctx.stroke();
     }
-    assets.drawHero(ctx,this.x,this.y,this.pose,this.facing,this.weapon,this.dodgeTimer);
+    assets.drawHero(ctx,this);
+    const ratio=KP.Utils.clamp(this.time/this.maxTime,0,1);
+    const bw=56, bh=6, bx=this.x+(this.w-bw)/2, by=this.y-18;
+    KP.Utils.drawBar(ctx,bx,by,bw,bh,ratio,ratio>.35?'#65e8ff':'#ff5a4f','rgba(0,0,0,.7)');
+    ctx.fillStyle='#dff8ff';
+    ctx.font='bold 10px Arial';
+    ctx.textAlign='center';
+    ctx.fillText(`${Math.ceil(this.time)}/${this.maxTime}`,this.x+this.w/2,by-2);
+    ctx.textAlign='left';
   }
 };
