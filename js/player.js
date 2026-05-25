@@ -132,8 +132,8 @@ KP.Player = class Player extends KP.Entity {
     else if(stunned&&this.grounded) this.pose='stun';
     else if(this.dodgeTimer>0) this.pose='dodge';
     else if(!this.grounded) this.pose=this.vy<0?'jump':'fall';
-    else if(Math.abs(this.vx)>1.25) this.pose='run';
     else if(this.attackFlash>0) this.pose='shoot';
+    else if(Math.abs(this.vx)>1.25) this.pose='run';
     else this.pose='stand';
 
     if(features.drain) this.drainNearbyEnemyTime(game);
@@ -219,7 +219,10 @@ KP.Player = class Player extends KP.Entity {
     if(this.abilities.meleeMastery&&w.type==='melee') dmg*=1.35;
     if(this.abilities.finalResolve) dmg*=1.10;
     const aim=this.aimVector(game);
+    const shotX=this.x+this.w/2+aim.x*30;
+    const shotY=this.y+25+aim.y*10;
     game.audio.playWeapon(this.weapon);
+    game.registerPlayerShot(shotX,shotY,w);
 
     if(w.type==='melee'){
       const hit={x:this.x+(this.facing>0?this.w:-w.range),y:this.y+8,w:w.range,h:this.h-6};
@@ -236,7 +239,7 @@ KP.Player = class Player extends KP.Entity {
     }
 
     const y=this.y+25;
-    const sx=this.x+this.w/2+aim.x*30, sy=y+aim.y*10;
+    const sx=shotX, sy=shotY;
     if(w.type==='shotgun'){
       const count=w.pellets||5;
       for(let i=0;i<count;i++){

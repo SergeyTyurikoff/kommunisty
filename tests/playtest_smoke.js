@@ -135,6 +135,65 @@ async function main(){
     });
     if(!aggressionSeen) throw new Error('Enemies did not enter an aggressive reaction state during smoke test.');
 
+    await page.evaluate(() => {
+      window.KP_TEST.clearEnemies();
+      const g = window.__KP_GAME__;
+      g.player.weapon = g.player.inventory.includes('pistol') ? 'pistol' : g.player.weapon;
+      g.player.facing = 1;
+      g.player.vx = 0;
+      g.player.vy = 0;
+      g.player.attackCd = 0;
+      window.KP_TEST.movePlayer(1180);
+      window.KP_TEST.spawnEnemy('zombie', 280);
+    });
+    await wait(200);
+    const chaseBefore = await page.evaluate(() => {
+      const enemy = window.__KP_GAME__.enemies.find(e => e.alive);
+      return enemy ? { x: enemy.x, state: enemy.state } : null;
+    });
+    if(!chaseBefore) throw new Error('No enemy available for under-fire chase scenario.');
+
+    await page.mouse.down();
+    await wait(90);
+    await page.mouse.up();
+    await wait(900);
+    const chaseAfter = await page.evaluate(() => {
+      const enemy = window.__KP_GAME__.enemies.find(e => e.alive);
+      return enemy ? { x: enemy.x, state: enemy.state, memoryTimer: enemy.memoryTimer, underFireTimer: enemy.underFireTimer } : null;
+    });
+    if(!chaseAfter) throw new Error('Enemy disappeared during under-fire chase scenario.');
+    if(!(chaseAfter.x < chaseBefore.x - 10 && (chaseAfter.state === 'aggro' || chaseAfter.memoryTimer > 0 || chaseAfter.underFireTimer > 0))){
+      throw new Error('Enemy did not push toward the player after nearby gunfire.');
+    }
+
+    await page.evaluate(() => {
+      window.KP_TEST.clearEnemies();
+      window.KP_TEST.movePlayer(1360);
+      window.KP_TEST.spawnEnemy('runner', 180);
+    });
+    await wait(450);
+    await page.keyboard.press('i');
+    await wait(120);
+    const inventoryBefore = await page.evaluate(() => {
+      const g = window.__KP_GAME__;
+      const enemy = g.enemies.find(e => e.alive);
+      return enemy ? { inventoryOpen: g.ui.inventoryOpen, enemyX: enemy.x, playerX: g.player.x } : null;
+    });
+    if(!inventoryBefore || !inventoryBefore.inventoryOpen) throw new Error('Inventory did not open during pause scenario.');
+
+    await wait(700);
+    const inventoryAfter = await page.evaluate(() => {
+      const g = window.__KP_GAME__;
+      const enemy = g.enemies.find(e => e.alive);
+      return enemy ? { inventoryOpen: g.ui.inventoryOpen, enemyX: enemy.x, playerX: g.player.x } : null;
+    });
+    if(!inventoryAfter) throw new Error('Enemy state missing after inventory pause scenario.');
+    if(Math.abs(inventoryAfter.enemyX - inventoryBefore.enemyX) > 1 || Math.abs(inventoryAfter.playerX - inventoryBefore.playerX) > 1){
+      throw new Error('Combat kept moving while inventory overlay was open.');
+    }
+    await page.keyboard.press('i');
+    await wait(120);
+
     const screenshotPath = path.join(projectRoot, 'tmp', 'playtest_menu_smoke.png');
     require('fs').mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath, fullPage: true });

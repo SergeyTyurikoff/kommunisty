@@ -215,7 +215,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       facing:-1,state:'patrol',shootCd:60,jumpCd:80,hurt:0,alertText:'',alertTimer:0,meleeCd:0,
       burn:0,burnDps:0,ramCd:b.ramCd||0,ramTimer:0,ramSpeed:b.ramSpeed||0,ramDuration:b.ramDuration||0,
       turboCd:120+Math.random()*160,turboTimer:0,timeDrained:false,
-      patrolMin:0,patrolMax:99999,floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,
+      patrolMin:0,patrolMax:99999,basePatrolMin:0,basePatrolMax:99999,laneType:'ground',floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,
       laneBias:U.rand(-28,28),strafeBias:Math.random()<.5?-1:1,
       burstCd:55+Math.random()*70,burstTimer:0,underFireTimer:0,
       strafeTimer:24+Math.random()*40|0,attackFlash:0,deathTimer:0,lastDodgeSerial:-1,
@@ -231,8 +231,11 @@ KP.Enemy = class Enemy extends KP.Entity {
     });
   }
 
-  setPatrol(min,max,floorY){
-    this.patrolMin=min; this.patrolMax=max; this.floorY=floorY;
+  setPatrol(min,max,floorY,laneType='ground'){
+    this.patrolMin=min; this.patrolMax=max;
+    this.basePatrolMin=min; this.basePatrolMax=max;
+    this.laneType=laneType;
+    this.floorY=floorY;
     this.x=KP.Utils.clamp(this.x,min,Math.max(min,max-this.w));
     this.y=floorY-this.h; this.grounded=true;
     this.lastSeenX=this.x; this.lastSeenY=this.y;
@@ -260,6 +263,12 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.memoryTimer=Math.max(this.memoryTimer,frames);
   }
 
+  rememberPoint(x,y,frames=150){
+    this.lastSeenX=x;
+    this.lastSeenY=y;
+    this.memoryTimer=Math.max(this.memoryTimer,frames);
+  }
+
   clampTargetX(raw){ return KP.Utils.clamp(raw,this.patrolMin+this.w*.5,Math.max(this.patrolMin+this.w*.5,this.patrolMax-this.w*.5)); }
   applyMove(dir,amount){
     if(!dir||!amount) return;
@@ -276,6 +285,26 @@ KP.Enemy = class Enemy extends KP.Entity {
       if(Math.abs(ally.x-this.x)<210){ this.rememberPlayer(p,95); return true; }
     }
     return false;
+  }
+
+  refreshCombatBounds(game,targetX){
+    if(this.laneType!=='ground'){
+      this.patrolMin=this.basePatrolMin;
+      this.patrolMax=this.basePatrolMax;
+      return;
+    }
+    const role=KP.Balance.enemies[this.kind]&&KP.Balance.enemies[this.kind].role;
+    const extra=role==='boss'?440:this.kind==='horse'?380:(this.shoot?330:290);
+    const pressureBoost=this.underFireTimer>0?150:0;
+    const min=Math.min(this.basePatrolMin,targetX-extra-pressureBoost);
+    const max=Math.max(this.basePatrolMax,targetX+extra+pressureBoost);
+    this.patrolMin=KP.Utils.clamp(min,0,game.world.worldW-this.w-40);
+    this.patrolMax=KP.Utils.clamp(max,this.patrolMin+this.w+40,game.world.worldW);
+  }
+
+  restorePatrolBounds(){
+    this.patrolMin=this.basePatrolMin;
+    this.patrolMax=this.basePatrolMax;
   }
 
   updateBurst(abs){
@@ -417,17 +446,28 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.intentMove=0;
     const sees=this.seePlayer(p);
     const allySupport=this.shouldSupportAllies(game,p,abs);
-    const hearsShots=game.player.attackCd>0&&abs<this.detect*.95&&Math.abs((p.y+p.h/2)-(this.y+this.h/2))<220;
+    const shotSignal=game.playerShotSignal&&game.playerShotSignal.timer>0?game.playerShotSignal:null;
+    const shotDx=shotSignal?shotSignal.x-(this.x+this.w/2):0;
+    const shotAbs=Math.abs(shotDx);
+    const heardRecentShot=!!(shotSignal&&shotAbs<shotSignal.radius&&Math.abs(shotSignal.y-(this.y+this.h/2))<260);
+    const hearsShots=heardRecentShot||(game.player.attackCd>0&&abs<this.detect*.95&&Math.abs((p.y+p.h/2)-(this.y+this.h/2))<220);
 
     if(sees){ this.aggro(); this.rememberPlayer(p,this.shoot?185:155); }
-    else if(hearsShots){ this.aggro('Огонь!'); this.rememberPlayer(p,this.shoot?145:125); }
+    else if(hearsShots){
+      this.aggro('Огонь!');
+      if(heardRecentShot) this.rememberPoint(shotSignal.x+this.laneBias,shotSignal.y,this.shoot?175:150);
+      else this.rememberPlayer(p,this.shoot?145:125);
+    }
     else if(allySupport){ this.aggro('Контакт!'); }
+
+    if(this.state==='aggro'||this.memoryTimer>0||this.underFireTimer>0) this.refreshCombatBounds(game,sees?p.x+p.w/2:this.lastSeenX);
+    else this.restorePatrolBounds();
 
     const speedMul=this.updateBossTurbo(game,abs,dir);
     if(this.kind==='lenin') this.updateLeninRam(game,abs,dir);
     this._updateAbilities(game,p,abs,dir);
 
-    if(this.state==='aggro') this.runAggro(game,p,abs,dir,speedMul,sees);
+    if(this.state==='aggro') this.runAggro(game,p,abs,dir,speedMul,sees,hearsShots);
     else this.runPatrol(speedMul);
 
     this.vx*=.88; this.vy+=game.gravity;
@@ -456,14 +496,14 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.stuckFrames=0;
   }
 
-  runAggro(game,p,abs,dir,speedMul,sees){
+  runAggro(game,p,abs,dir,speedMul,sees,hearsShots=false){
     const targetInside=p.x>this.patrolMin-140&&p.x<this.patrolMax+140;
     const canTrackVertical=Math.abs((p.y+p.h)-(this.floorY||this.y+this.h))<210;
     const pressureOk=targetInside&&(this.sameFloor(p)||this.shoot||this.kind==='lenin'||canTrackVertical);
     const rememberedX=this.clampTargetX((sees?p.x+p.w/2:this.lastSeenX));
     const center=this.x+this.w/2;
     const pursueDir=rememberedX>=center?1:-1;
-    const pressureFromFire=this.underFireTimer>0||(game.player.attackCd>0&&abs<this.detect*.95);
+    const pressureFromFire=this.underFireTimer>0||hearsShots||(game.player.attackCd>0&&abs<this.detect*.95);
     const meleeSettle=!this.shoot&&abs<=this.attackRange+26&&this.sameFloor(p);
     this.facing=pursueDir||dir||this.facing;
 

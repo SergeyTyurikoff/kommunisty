@@ -74,7 +74,7 @@ KP.World = class World {
       const min=KP.Utils.clamp(x-radius,p.x+8,p.x+p.w-95);
       const max=KP.Utils.clamp(x+radius,p.x+110,p.x+p.w-8);
       if(max-min<100) return;
-      this.enemySpawns.push({x,floorY:p.y,min,max,kind});
+      this.enemySpawns.push({x,floorY:p.y,min,max,kind,platformType:p.type});
     };
 
     const ground=platforms.find(p=>p.type==='ground');
@@ -83,7 +83,7 @@ KP.World = class World {
       xs.forEach((x,idx)=>{
         const kind=normalByLevel[idx%normalByLevel.length];
         const min=Math.max(620,x-120), max=Math.min(2650,x+120);
-        this.enemySpawns.push({x,floorY:ground.y,min,max,kind});
+        this.enemySpawns.push({x,floorY:ground.y,min,max,kind,platformType:ground.type});
       });
     }
 
@@ -93,7 +93,7 @@ KP.World = class World {
     });
 
     const bossKind=['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'][this.levelIndex];
-    this.enemySpawns.push({x:2700,floorY:485,min:2520,max:2860,kind:bossKind});
+    this.enemySpawns.push({x:2700,floorY:485,min:2520,max:2860,kind:bossKind,platformType:'ground'});
   }
 
   solid(){ return [...this.platforms]; }

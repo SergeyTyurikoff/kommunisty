@@ -21,6 +21,7 @@ KP.Game = class Game {
     this.timeStopFrames=0; this.levelTransition=0;
     this.paused=false; this.deathStats=null;
     this.combatPressure=0;
+    this.playerShotSignal={x:0,y:0,radius:0,timer:0,weaponType:null};
     this.frameId=0;
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.spawnLevel();
@@ -35,7 +36,7 @@ KP.Game = class Game {
 
     for(const sp of this.world.enemySpawns){
       const e=new KP.Enemy(sp.x,0,sp.kind);
-      e.setPatrol(sp.min,sp.max,sp.floorY);
+      e.setPatrol(sp.min,sp.max,sp.floorY,sp.platformType||'ground');
       this.applyBiomeScaling(e);
       this.enemies.push(e);
     }
@@ -95,6 +96,7 @@ KP.Game = class Game {
       return;
     }
     if(this.timeStopFrames>0) this.timeStopFrames--;
+    if(this.playerShotSignal.timer>0) this.playerShotSignal.timer--;
 
     if(this.comboTimer>0) this.comboTimer--;
     else { this.comboCount=0; this.comboMul=1; }
@@ -108,6 +110,7 @@ KP.Game = class Game {
     }
 
     if(this.ui.shopOpen){ this.shopInput(); return; }
+    if(this.ui.inventoryOpen){ this.inventoryInput(); return; }
     if(this.input.wasPressed('interact')){
       const openedUi=this.interact();
       if(openedUi){ this.updateCamera(); this.updateParticles(); return; }
@@ -249,6 +252,23 @@ KP.Game = class Game {
     }
     for(const e of this.enemies) if(this.visible(e,1000,500)) e.update(this);
     this.enemies=this.enemies.filter(e=>e.alive||e.deathTimer>0);
+  }
+
+  inventoryInput(){
+    if(this.input.wasPressed('inventory')||this.input.wasPressed('esc')){
+      this.ui.inventoryOpen=false;
+      return;
+    }
+    if(this.input.wasPressed('weaponNext')){
+      this.player.nextWeapon(this);
+      return;
+    }
+    const slots=[['one','pistol'],['two','mosin'],['three','smg'],['four','flamethrower'],['five','sabre'],['six','shotgun']];
+    for(const [act,id] of slots) if(this.input.wasPressed(act)&&this.player.inventory.includes(id)){
+      this.player.weapon=id;
+      this.toast('Оружие: '+KP.Balance.weapons[id].name);
+      return;
+    }
   }
 
   resolveEntityCollisions(){
@@ -447,6 +467,18 @@ KP.Game = class Game {
     for(let i=0;i<count;i++) this.particles.push(new KP.Particle(x,y,color));
   }
 
+  registerPlayerShot(x,y,weaponMeta={}){
+    const radius=weaponMeta.soundRadius||(
+      weaponMeta.type==='melee'?96:
+      weaponMeta.type==='flame'?300:
+      weaponMeta.type==='shotgun'?520:
+      weaponMeta.delay>=700?760:
+      weaponMeta.delay<=100?640:480
+    );
+    const timer=weaponMeta.type==='melee'?16:(weaponMeta.type==='flame'?34:48);
+    this.playerShotSignal={x,y,radius,timer,weaponType:weaponMeta.type||'gun'};
+  }
+
   updateDodgeCollisions(){
     if(this.player.dodgeTimer<=0) return;
     const cfg=KP.Balance.player.dodge;
@@ -530,12 +562,12 @@ window.addEventListener('DOMContentLoaded',()=>{
       placePlayerNearGround(); return {x:game.player.x,y:game.player.y};
     },
     snapshot(){
-      return {
-        intro:game.ui.intro, levelIndex:game.levelIndex, biome:game.world.biomeName(),
-        menuIndex:game.ui.menuIndex, controlsOpen:game.ui.controlsOpen,
-        player:{x:game.player.x,y:game.player.y,time:game.player.time,weapon:game.player.weapon},
-        enemies:game.enemies.map(e=>({kind:e.kind,x:e.x,y:e.y,state:e.state,memoryTimer:e.memoryTimer,underFireTimer:e.underFireTimer,alive:e.alive})),
-        bullets:{player:game.playerBullets.length,enemy:game.enemyBullets.length}
+        return {
+          intro:game.ui.intro, levelIndex:game.levelIndex, biome:game.world.biomeName(),
+          menuIndex:game.ui.menuIndex, controlsOpen:game.ui.controlsOpen, inventoryOpen:game.ui.inventoryOpen,
+          player:{x:game.player.x,y:game.player.y,time:game.player.time,weapon:game.player.weapon},
+          enemies:game.enemies.map(e=>({kind:e.kind,x:e.x,y:e.y,state:e.state,memoryTimer:e.memoryTimer,underFireTimer:e.underFireTimer,alive:e.alive})),
+          bullets:{player:game.playerBullets.length,enemy:game.enemyBullets.length}
       };
     }
   };
