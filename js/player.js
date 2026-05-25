@@ -5,6 +5,7 @@ KP.Player = class Player extends KP.Entity {
 
   reset(){
     const b=KP.Balance.player;
+    const features=KP.Balance.featureFlags||{};
     const ammoBag={}, maxAmmoBag={};
     for(const [id,a] of Object.entries(KP.Balance.ammoTypes)){
       ammoBag[id]=a.start; maxAmmoBag[id]=a.max;
@@ -17,42 +18,54 @@ KP.Player = class Player extends KP.Entity {
       turbo:0,turboCd:0,weak:0,timeStopCd:0,
       weapon:'mosin',inventory:['pistol','mosin'],
       invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
-      attackFlash:0,dodgeSerial:0,
+      attackFlash:0,dodgeSerial:0,runHeld:false,
+      enemyHitChain:0,enemyHitChainTimer:0,stunTimer:0,
       // Dodge
       dodgeTimer:0,dodgeCd:0,dodgeVx:0,
       // Combo (tracked at game level but reset on player reset)
-      abilities:{drain:true,doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
+      abilities:{drain:!!features.drain,doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
     });
   }
 
   update(game){
-    const input=game.input, b=KP.Balance.player;
+    const input=game.input, b=KP.Balance.player, features=KP.Balance.featureFlags||{};
     if(this.invuln>0) this.invuln--;
     if(this.attackCd>0) this.attackCd--;
     if(this.attackFlash>0) this.attackFlash--;
     if(this.timeStopCd>0) this.timeStopCd--;
     if(this.dropTimer>0) this.dropTimer--;
     if(this.dodgeCd>0) this.dodgeCd--;
+    if(this.stunTimer>0) this.stunTimer--;
+    if(this.enemyHitChainTimer>0) this.enemyHitChainTimer--;
+    else if(this.enemyHitChain>0) this.enemyHitChain=0;
 
     this.time-=b.baseTimeDecay;
-    if(this.turbo>0){
-      this.turbo--; this.time-=b.turboTimeCostPerFrame;
-      if(this.turbo<=0){ this.weak=b.turboCooldown; game.toast('Откат турбо: Феликс временно выжат.'); }
-    } else if(this.turboCd>0){ this.turboCd--; }
-    if(this.weak>0) this.weak--;
+    if(features.turbo){
+      if(this.turbo>0){
+        this.turbo--;
+        this.time-=b.turboTimeCostPerFrame;
+        if(this.turbo<=0){
+          this.weak=b.turboCooldown;
+          game.toast('Откат турбо: Феликс временно выжат.');
+        }
+      } else if(this.turboCd>0){
+        this.turboCd--;
+      }
+      if(this.weak>0) this.weak--;
+    } else {
+      this.turbo=0;
+      this.turboCd=0;
+      this.weak=0;
+    }
     if(game.timeStopFrames>0) this.time-=b.timeStopDrainPerFrame;
 
-    if(input.wasPressed('turbo')){
-      if(!this.abilities.turbo) game.toast('Турбо ещё не открыто. Сначала доберись до пустыни.');
-      else if(this.turbo<=0&&this.turboCd<=0&&this.time>35){
-        this.turbo=b.turboDuration; this.turboCd=b.turboDuration+b.turboCooldown;
-        game.toast('Турбо: 5 секунд быстрее и сильнее, потом короткая слабость.');
-      }
-    }
-    if(input.wasPressed('timeStop')) this.tryTimeStop(game);
+    const stunned=this.stunTimer>0;
+    this.runHeld=!stunned&&input.isDown('run')&&(input.isDown('left')||input.isDown('right'));
+
+    if(!stunned&&input.wasPressed('timeStop')) this.tryTimeStop(game);
 
     // Dodge roll
-    if(input.wasPressed('dodge')){
+    if(!stunned&&input.wasPressed('dodge')){
       if(this.dodgeCd<=0&&this.time>b.dodge.cost){
         const dodgeSpd=b.dodge.speed*(this.abilities.finalResolve?1.25:1);
         this.dodgeTimer=b.dodge.duration;
@@ -68,48 +81,64 @@ KP.Player = class Player extends KP.Entity {
       }
     }
 
-    const speedMul=(this.turbo>0?b.turboSpeed:1)*(this.weak>0?b.weakSpeed:1);
     const left=input.isDown('left'), right=input.isDown('right');
+    const speedMul=(this.runHeld?b.runSpeed:1)*(this.turbo>0?b.turboSpeed:1)*(this.weak>0?b.weakSpeed:1);
 
     if(this.dodgeTimer>0){
       this.dodgeTimer--;
-      this.vx=this.dodgeVx; // fixed velocity during dodge
-    } else {
+      this.vx=this.dodgeVx;
+    } else if(!stunned){
       if(left){ this.vx-=b.speed*speedMul; this.facing=-1; }
       if(right){ this.vx+=b.speed*speedMul; this.facing=1; }
     }
 
-    this.pose='stand'; this.h=58;
+    this.pose='stand';
+    this.h=58;
 
-    if((input.wasPressed('downAct')||input.isDown('downAct'))&&this.grounded&&this.floorContact&&this.floorContact.type==='sky'){
-      this.dropPlatform=this.floorContact;
-      this.dropTimer=60; this.y+=(this.floorContact.h||18)+6; this.vy=Math.max(this.vy,5.2);
-      this.grounded=false; this.floorContact=null;
+    if(!stunned&&(input.wasPressed('downAct')||input.isDown('downAct'))){
+      const support=(this.floorContact&&this.floorContact.type==='sky')?this.floorContact:game.world.findDropPlatform(this);
+      if(support){
+        this.dropPlatform=support;
+        this.dropTimer=60;
+        this.y=Math.max(this.y,support.y+4);
+        this.vy=Math.max(this.vy,5.8);
+        this.grounded=false;
+        this.floorContact=null;
+      }
     }
 
     const maxJumps=this.abilities.doubleJump?2:1;
-    if(input.wasPressed('up')&&this.jumpsLeft>0){
+    if(!stunned&&input.wasPressed('up')&&this.jumpsLeft>0){
       this.vy=b.jump; this.jumpsLeft--;
       game.burst(this.x+this.w/2,this.y+this.h,'#ffd21c',8);
     }
-    if(input.wasPressed('weaponNext')) this.nextWeapon(game);
+    if(!stunned&&input.wasPressed('weaponNext')) this.nextWeapon(game);
     const slots=[['one','pistol'],['two','mosin'],['three','smg'],['four','flamethrower'],['five','sabre'],['six','shotgun']];
-    for(const [act,id] of slots) if(input.wasPressed(act)&&this.inventory.includes(id)) this.weapon=id;
-    if(input.wasPressed('inventory')) game.ui.inventoryOpen=!game.ui.inventoryOpen;
-    if(input.wasPressed('attack')||game.input.mouseDown) this.attack(game);
+    if(!stunned) for(const [act,id] of slots) if(input.wasPressed(act)&&this.inventory.includes(id)) this.weapon=id;
+    if(!stunned&&input.wasPressed('inventory')) game.ui.inventoryOpen=!game.ui.inventoryOpen;
+    if(!stunned&&(input.wasPressed('attack')||game.input.mouseDown)) this.attack(game);
 
-    this.vx*=.84;
+    this.vx*=(stunned&&this.grounded)?0.76:0.84;
     this.vx=KP.Utils.clamp(this.vx,-7.2*speedMul,7.2*speedMul);
     this.vy+=game.gravity;
     game.world.collide(this);
-    if(this.grounded) this.jumpsLeft=maxJumps;
+    if(this.grounded){
+      this.jumpsLeft=maxJumps;
+      this.runHeld=!stunned&&input.isDown('run')&&(input.isDown('left')||input.isDown('right'));
+    } else {
+      this.runHeld=false;
+    }
     if(this.dead) this.pose='dead';
+    else if(stunned&&this.grounded) this.pose='stun';
     else if(this.dodgeTimer>0) this.pose='dodge';
     else if(!this.grounded) this.pose=this.vy<0?'jump':'fall';
     else if(Math.abs(this.vx)>1.25) this.pose='run';
     else if(this.attackFlash>0) this.pose='shoot';
     else this.pose='stand';
-    this.drainNearbyEnemyTime(game);
+
+    if(features.drain) this.drainNearbyEnemyTime(game);
+    else this.draining=false;
+
     if(this.time<=0){ this.time=0; this.dead=true; }
   }
 
@@ -127,8 +156,9 @@ KP.Player = class Player extends KP.Entity {
 
   drainNearbyEnemyTime(game){
     const b=KP.Balance.player;
+    const features=KP.Balance.featureFlags||{};
     this.draining=false;
-    if(!this.abilities.drain) return;
+    if(!features.drain||!this.abilities.drain) return;
     if(!game.input.isDown('interact')) return;
     let drained=false;
     for(const e of game.enemies){
@@ -176,7 +206,7 @@ KP.Player = class Player extends KP.Entity {
 
   attack(game){
     const w=KP.Balance.weapons[this.weapon];
-    if(this.attackCd>0) return;
+    if(this.attackCd>0||this.stunTimer>0) return;
     const ammoType=w.ammoType, ammoUse=w.ammoUse||0;
     if(ammoType&&(this.ammoBag[ammoType]||0)<ammoUse){
       game.toast(`Нет боеприпасов: ${KP.Balance.ammoTypes[ammoType].name}.`);
@@ -228,6 +258,21 @@ KP.Player = class Player extends KP.Entity {
     game.burst(sx,sy,w.color,flame?3:8);
   }
 
+  registerEnemyHit(game){
+    const b=KP.Balance.player;
+    if(this.dead) return;
+    if(this.stunTimer>0) return;
+    this.enemyHitChainTimer=b.hitStunResetFrames;
+    this.enemyHitChain++;
+    if(this.enemyHitChain<b.hitStunHits) return;
+    this.enemyHitChain=0;
+    this.enemyHitChainTimer=0;
+    this.stunTimer=b.hitStunDuration;
+    this.vx=0;
+    game.toast('Феликс оглушён на 2 секунды.');
+    game.burst(this.x+this.w/2,this.y+this.h/2,'#ffd21c',18);
+  }
+
   hurt(timeLoss,dir,game=null){
     if(this.invuln>0) return;
     this.time-=timeLoss; this.invuln=42;
@@ -235,6 +280,7 @@ KP.Player = class Player extends KP.Entity {
     if(game){
       if(this.time<=0) game.audio.play('playerDown',1);
       else game.audio.play('playerHit',0.96+Math.random()*0.08);
+      this.registerEnemyHit(game);
     }
     if(this.time<=0){ this.time=0; this.dead=true; }
   }
@@ -251,6 +297,8 @@ KP.Player = class Player extends KP.Entity {
   }
 
   unlockAbility(id,game){
+    const features=KP.Balance.featureFlags||{};
+    if((id==='drain'&&!features.drain)||(id==='turbo'&&!features.turbo)) return;
     if(!id||this.abilities[id]) return;
     this.abilities[id]=true;
     const meta=(KP.Balance.abilityUnlocks||[]).find(a=>a.id===id);
@@ -258,7 +306,6 @@ KP.Player = class Player extends KP.Entity {
   }
 
   draw(ctx,assets){
-    // Dodge afterimage
     if(this.dodgeTimer>0){
       ctx.save();
       ctx.globalAlpha=this.dodgeTimer/KP.Balance.player.dodge.duration*0.4;
@@ -274,6 +321,13 @@ KP.Player = class Player extends KP.Entity {
     if(this.weak>0){
       ctx.fillStyle='rgba(80,80,80,.25)';
       ctx.beginPath(); ctx.ellipse(this.x+17,this.y+32,24,40,0,0,Math.PI*2); ctx.fill();
+    }
+    if(this.stunTimer>0){
+      ctx.strokeStyle='rgba(255,210,28,.75)'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(this.x+17,this.y+22,18,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='rgba(255,210,28,.9)';
+      ctx.fillRect(this.x+11,this.y-10,4,4);
+      ctx.fillRect(this.x+20,this.y-14,4,4);
     }
     if(this.draining){
       ctx.strokeStyle='#65e8ff'; ctx.lineWidth=3;

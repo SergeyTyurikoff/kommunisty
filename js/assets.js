@@ -78,14 +78,14 @@ KP.Assets = class Assets {
   }
 
   _drawWalkerLegs(ctx,x,y,width,phase,airborne=false,primary='#1a1a1a',secondary='#0d0d0d'){
-    const stride=airborne?0:Math.sin(phase)*4.6;
-    const lift=airborne?5:Math.max(0,Math.cos(phase))*2.2;
+    const stride=airborne?0:Math.sin(phase)*5.8;
+    const lift=airborne?5:Math.abs(Math.cos(phase))*3.2;
     ctx.fillStyle=primary;
-    ctx.fillRect(x+7,y+47-lift,7,12+lift);
-    ctx.fillRect(x+19,y+47+lift*.2,7,12);
+    ctx.fillRect(x+7,y+45-lift,7,14+lift);
+    ctx.fillRect(x+19,y+45-(3.2-lift*.45),7,14+(3.2-lift*.45));
     ctx.fillStyle=secondary;
-    ctx.fillRect(x+7+stride*0.28,y+56-lift*.35,9,4);
-    ctx.fillRect(x+19-stride*0.28,y+56+lift*.1,9,4);
+    ctx.fillRect(x+6+stride*0.38,y+57-lift*.24,10,4);
+    ctx.fillRect(x+18-stride*0.38,y+57+(3.2-lift)*.18,10,4);
   }
 
   _drawMuzzleFlash(ctx,x,y,size,color='#ffd21c'){
@@ -104,18 +104,18 @@ KP.Assets = class Assets {
 
   drawHero(ctx,player){
     const x=player.x, y=player.y, facing=player.facing, weapon=player.weapon;
-    const phase=performance.now()/110+player.x*.025;
+    const phase=performance.now()/88+player.x*.03;
     const airborne=!player.grounded;
     const running=player.pose==='run';
-    const bob=player.dead?0:(running?Math.abs(Math.sin(phase))*2.2:airborne?-2.5:0);
-    const lean=player.dead?-0.85*facing:player.dodgeTimer>0?-0.45*facing:running?Math.sin(phase)*0.06:airborne?(player.vy<0?-0.07:0.11):player.attackFlash>0?0.05*facing:0;
+    const bob=player.dead?0:(airborne?-1.7:0);
+    const lean=player.dead?-0.85*facing:player.dodgeTimer>0?-0.45*facing:airborne?(player.vy<0?-0.03:0.05):player.attackFlash>0?0.02*facing:0;
     const heroW=36, heroH=52;
     ctx.fillStyle='rgba(0,0,0,.24)';
     ctx.beginPath();
     ctx.ellipse(x+17,y+58,17,5,0,0,Math.PI*2);
     ctx.fill();
     this._actorTransform(ctx,player,bob,lean,player.dead?0.72:1);
-    this._drawWalkerLegs(ctx,x,y,player.w,phase,airborne,'#1a1a1a','#070707');
+    this._drawWalkerLegs(ctx,x,y,player.w,running?phase:phase*.45,airborne,'#1a1a1a','#070707');
     const drew=this.drawImg(ctx,'hero',x-2,y+3,heroW,heroH,facing<0);
     if(!drew){
       this._withFacing(ctx,x,y,34,facing,()=>{
@@ -160,12 +160,12 @@ KP.Assets = class Assets {
   }
 
   drawEnemy(ctx,e){
-    const phase=performance.now()/120+e.x*.018;
+    const phase=performance.now()/(Math.abs(e.vx)>0.55?78:118)+e.x*.018;
     const airborne=!e.grounded;
     const moving=e.alive&&Math.abs(e.vx)>0.55;
-    const bob=e.alive?(moving?Math.abs(Math.sin(phase))*2.1:airborne?-2:0):0;
+    const bob=e.alive?(moving?Math.abs(Math.sin(phase))*2.3:airborne?-2:0):0;
     const deathPhase=e.deathTimer>0?1-e.deathTimer/28:0;
-    const lean=e.alive?(e.rollTimer>0?-0.5*e.facing:moving?Math.sin(phase)*0.07:0):(-0.85*e.facing*deathPhase);
+    const lean=e.alive?(e.rollTimer>0?-0.5*e.facing:moving?Math.sin(phase)*0.09:0):(-0.85*e.facing*deathPhase);
     const alpha=e.alive?1:Math.max(.25,e.deathTimer/28);
     this._actorTransform(ctx,e,bob,lean,alpha);
     if(!['horse','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'].includes(e.kind)) this._drawWalkerLegs(ctx,e.x,e.y,e.w,phase,airborne,'#232323','#101010');

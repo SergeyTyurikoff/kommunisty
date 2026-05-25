@@ -14,6 +14,15 @@ KP.World = class World {
   get worldW(){ return this.levelW; }
   biomeName(){ return this.biomes[this.levelIndex]||'???'; }
   addPlatform(x,y,w,h,type='ground'){ const p={x,y,w,h,type}; this.platforms.push(p); return p; }
+  findDropPlatform(o){
+    const footY=o.y+o.h;
+    return this.platforms.find(p=>
+      p.type==='sky' &&
+      o.x+o.w>p.x+4 &&
+      o.x<p.x+p.w-4 &&
+      Math.abs(footY-p.y)<=18
+    )||null;
+  }
 
   build(){
     const i=this.levelIndex;
@@ -31,9 +40,9 @@ KP.World = class World {
 
     this.shops.push({x:185,y:415,w:70,h:70,name:`Снабженец: ${this.biomeName()}`});
 
-    this.chests.push({x:760,  y:444,w:38,h:26,open:false,loot:i%2===0?'money':'ammo'});
+    this.chests.push({x:760,  y:444,w:38,h:26,open:false,loot:i%3===0?'heal':(i%2===0?'money':'ammo')});
     this.chests.push({x:1320, y:444,w:38,h:26,open:false,loot:['sabre','smg','shotgun','money','ammo','flamethrower'][i]||'money'});
-    this.chests.push({x:1980, y:444,w:38,h:26,open:false,loot:['money','ammo','sabre','smg','shotgun','money'][i]||'money'});
+    this.chests.push({x:1980, y:444,w:38,h:26,open:false,loot:['money','heal','sabre','smg','shotgun','heal'][i]||'money'});
 
     // Crates — destructible, spread across level
     const crateXs=[540,880,1180,1520,1840,2200,2480];
@@ -92,6 +101,7 @@ KP.World = class World {
   collide(o){
     const prevBottom=o.y+o.h;
     o.grounded=false;
+    o.floorContact=null;
     o.x+=o.vx;
     const hardSolids=this.platforms.filter(p=>p.type==='ground');
     for(const p of hardSolids) if(KP.Utils.rects(o,p)){

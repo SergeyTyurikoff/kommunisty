@@ -124,6 +124,6 @@ KP.AudioSystem = class AudioSystem {
   playPickup(type){
     if(type==='money') return this.play('pickupMoney',1+Math.random()*0.08);
     if(type==='ammo') return this.play('pickupAmmo',.96+Math.random()*0.12);
-    if(type==='time') return this.play('pickupTime',.92+Math.random()*0.06);
+    if(type==='time'||type==='heal') return this.play('pickupTime',.92+Math.random()*0.06);
   }
 };

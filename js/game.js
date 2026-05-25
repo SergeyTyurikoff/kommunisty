@@ -22,7 +22,6 @@ KP.Game = class Game {
     this.paused=false; this.deathStats=null;
     this.combatPressure=0;
     this.frameId=0;
-    // Combo system
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.spawnLevel();
     this.loop=this.loop.bind(this);
@@ -41,13 +40,14 @@ KP.Game = class Game {
       this.enemies.push(e);
     }
 
-    // Pickups — varied positions per level
     const ammoTypes=Object.keys(KP.Balance.ammoTypes);
     const seed=this.levelIndex*17;
     for(let n=0;n<14;n++){
       const type=n%3===0?'ammo':(n%5===0?'time':'money');
       const ammoType=type==='ammo'?ammoTypes[(n+seed)%ammoTypes.length]:null;
-      const amount=type==='ammo'?(ammoType==='machinegun'?22:ammoType==='fuel'?18:ammoType==='shells'?4:8):(type==='time'?8:(KP.Utils.rand(2,8)|0));
+      const amount=type==='ammo'
+        ?(ammoType==='machinegun'?22:ammoType==='fuel'?18:ammoType==='shells'?4:8)
+        :(type==='time'?8:(KP.Utils.rand(2,8)|0));
       const px=350+n*160+(n%3)*40+(seed%20);
       this.pickups.push(new KP.Pickup(px,455,type,amount,ammoType));
     }
@@ -79,15 +79,13 @@ KP.Game = class Game {
     if(this.input.wasPressed('restart')){ this.restart(); return; }
     if(this.ui.intro){ this.updateIntroMenu(); return; }
     if(this.ui.ending||this.player.dead){
-      // Record death stats once
       if(this.player.dead&&!this.deathStats){
         this.deathStats={ kills:this.kills, biome:this.world.biomeName(), biomeIndex:this.levelIndex, level:this.player.level, maxCombo:this.maxCombo };
       }
       return;
     }
 
-    // Pause toggle
-    if(this.input.wasPressed('esc')){ this.paused=!this.paused; }
+    if(this.input.wasPressed('esc')) this.paused=!this.paused;
     if(this.paused) return;
 
     if(this.toastTimer>0) this.toastTimer--;
@@ -98,11 +96,9 @@ KP.Game = class Game {
     }
     if(this.timeStopFrames>0) this.timeStopFrames--;
 
-    // Combo decay
-    if(this.comboTimer>0){ this.comboTimer--; }
+    if(this.comboTimer>0) this.comboTimer--;
     else { this.comboCount=0; this.comboMul=1; }
 
-    // Combat pressure: extra time decay when enemies are nearby
     const nearEnemy=this.enemies.some(e=>e.alive&&Math.abs(e.x-this.player.x)<280&&Math.abs(e.y-this.player.y)<160);
     if(nearEnemy&&this.timeStopFrames<=0){
       this.combatPressure=Math.min(120,this.combatPressure+3);
@@ -130,7 +126,6 @@ KP.Game = class Game {
     this.updateDamageNumbers();
   }
 
-  // Called when player hits an enemy (bullet or melee)
   registerHit(dmg=0){
     this.comboCount++;
     this.comboTimer=KP.Balance.player.combo.window;
@@ -211,10 +206,10 @@ KP.Game = class Game {
     if(!this.world.portal) return;
     if(KP.Utils.rects(this.player,this.world.portal)){
       const bossAlive=this.enemies.some(e=>e.alive&&KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss');
-      if(bossAlive){ this.toast('Сначала убей босса биома. Выход не любит незавершённые перевороты.'); this.player.x=this.world.portal.x-80; return; }
+      if(bossAlive){ this.toast('Сначала убей босса биома.'); this.player.x=this.world.portal.x-80; return; }
       if(this.levelIndex>=this.world.biomes.length-1){ this.ui.ending=true; return; }
       this.levelTransition=45;
-      this.toast('Переход в следующий биом. Пейзаж меняется, долг перед историей остаётся.');
+      this.toast('Переход в следующий биом.');
     }
   }
 
@@ -274,7 +269,8 @@ KP.Game = class Game {
       } else {
         a.x+=dir*amount*.5; b.x-=dir*amount*.5;
       }
-      a.vx*=.35; b.vx*=.35;
+      const damp=playerInvolved?0.38:0.92;
+      a.vx*=damp; b.vx*=damp;
     };
     for(const e of this.enemies) pushApart(this.player,e,true);
     for(let i=0;i<this.enemies.length;i++) for(let j=i+1;j<this.enemies.length;j++) pushApart(this.enemies[i],this.enemies[j],false);
@@ -288,7 +284,6 @@ KP.Game = class Game {
 
     for(const b of this.playerBullets){
       if(!b.alive) continue;
-      // Check crates
       for(const c of this.world.crates){
         if(c.alive&&KP.Utils.rects(b,c)){
           c.takeDamage(this); b.alive=false; break;
@@ -307,7 +302,8 @@ KP.Game = class Game {
     for(const b of this.enemyBullets){
       if(!b.alive) continue;
       if(KP.Utils.rects(b,this.player)){
-        b.alive=false; this.player.hurt(b.dmg,b.x<this.player.x?1:-1,this);
+        b.alive=false;
+        this.player.hurt(b.dmg,b.x<this.player.x?1:-1,this);
       }
     }
     this.playerBullets=this.playerBullets.filter(b=>b.alive&&this.visible(b,350,220));
@@ -321,7 +317,6 @@ KP.Game = class Game {
       const m=KP.Utils.rand(e.moneyRange[0],e.moneyRange[1])|0;
       this.player.gainXP(this,e.xp);
       this.pickups.push(new KP.Pickup(e.x+e.w/2,e.y+e.h/2,'money',m));
-      // Ammo drop — prefer weapons in player's inventory
       if(Math.random()<.45){
         const inv=this.player.inventory;
         const allTypes=Object.keys(KP.Balance.ammoTypes);
@@ -330,7 +325,8 @@ KP.Game = class Game {
         const qty=at==='machinegun'?18:at==='fuel'?14:at==='shells'?3:7;
         this.pickups.push(new KP.Pickup(e.x+10,e.y,'ammo',qty,at));
       }
-      if(Math.random()<.20) this.pickups.push(new KP.Pickup(e.x+20,e.y,'time',8));
+      if(Math.random()<.16) this.pickups.push(new KP.Pickup(e.x+20,e.y,'heal',KP.Balance.player.healPickupAmount));
+      else if(Math.random()<.14) this.pickups.push(new KP.Pickup(e.x+20,e.y,'time',8));
       if(e.kind==='lenin'){ this.ui.ending=true; this.toast('Ленин повержен. Время снова потекло вперёд.'); }
       return;
     }
@@ -343,8 +339,9 @@ KP.Game = class Game {
       if(KP.Utils.rects(p,this.player)){
         if(p.type==='money') this.player.money+=p.amount;
         if(p.type==='ammo') this.player.addAmmo(p.ammoType||'rifle',p.amount);
-        if(p.type==='time') this.player.time=KP.Utils.clamp(this.player.time+p.amount,0,this.player.maxTime);
-        this.audio.playPickup(p.type); p.alive=false;
+        if(p.type==='time'||p.type==='heal') this.player.time=KP.Utils.clamp(this.player.time+p.amount,0,this.player.maxTime);
+        this.audio.playPickup(p.type);
+        p.alive=false;
       }
     }
     this.pickups=this.pickups.filter(p=>p.alive);
@@ -372,14 +369,25 @@ KP.Game = class Game {
     for(const c of this.world.chests) if(!c.open&&KP.Utils.near(this.player,c,90,95)){
       c.open=true; this.openChest(c); return false;
     }
-    this.toast('Рядом нет объекта для E. Кнопка пока не научилась открывать воздух.');
+    this.toast('Рядом нет объекта для E.');
     return false;
   }
 
   openChest(c){
-    if(c.loot==='money'){ this.player.money+=45; this.toast('+45 денег из сундука. Происхождение не уточняем.'); }
-    else if(c.loot==='ammo'){ this.player.addAmmo('rifle',12); this.player.addAmmo('pistol',18); this.toast('+патроны (винтовка + пистолет).'); }
-    else { if(!this.player.inventory.includes(c.loot)) this.player.inventory.push(c.loot); this.toast('Найдено оружие: '+KP.Balance.weapons[c.loot].name); }
+    if(c.loot==='money'){
+      this.player.money+=45;
+      this.toast('+45 денег из сундука.');
+    } else if(c.loot==='ammo'){
+      this.player.addAmmo('rifle',12);
+      this.player.addAmmo('pistol',18);
+      this.toast('+патроны (винтовка + пистолет).');
+    } else if(c.loot==='heal'){
+      this.pickups.push(new KP.Pickup(c.x+8,c.y-6,'heal',Math.round(KP.Balance.player.healPickupAmount*1.25)));
+      this.toast('Из сундука выпало лечение.');
+    } else {
+      if(!this.player.inventory.includes(c.loot)) this.player.inventory.push(c.loot);
+      this.toast('Найдено оружие: '+KP.Balance.weapons[c.loot].name);
+    }
   }
 
   getShopAmmoOptions(){
@@ -397,7 +405,7 @@ KP.Game = class Game {
   buyAmmoType(ammoType){
     const meta=KP.Balance.ammoTypes[ammoType];
     if(!meta) return;
-    if(this.player.money<meta.price){ this.toast('Не хватает денег. Даже плесень богаче.'); return; }
+    if(this.player.money<meta.price){ this.toast('Не хватает денег.'); return; }
     this.player.money-=meta.price;
     this.player.addAmmo(ammoType,meta.buyAmount);
     this.toast(`Куплены ${meta.name} патроны: +${meta.buyAmount}.`);
@@ -409,11 +417,10 @@ KP.Game = class Game {
       this.ui.shopOpen=null; return;
     }
     const buy=(id,cost)=>{
-      if(this.player.money<cost) return this.toast('Не хватает денег. Даже плесень богаче.');
+      if(this.player.money<cost) return this.toast('Не хватает денег.');
       this.player.money-=cost;
-      if(id==='time') this.player.time=KP.Utils.clamp(this.player.time+KP.Balance.shop.timeAmount,0,this.player.maxTime);
-      else if(!this.player.inventory.includes(id)) this.player.inventory.push(id);
-      this.toast(id==='time'?`+${KP.Balance.shop.timeAmount} времени`:id==='ammo'?'боеприпасы куплены':'Куплено: '+KP.Balance.weapons[id].name);
+      if(!this.player.inventory.includes(id)) this.player.inventory.push(id);
+      this.toast('Куплено: '+KP.Balance.weapons[id].name);
     };
     if(this.ui.shopAmmoOpen){
       const options=this.getShopAmmoOptions();
@@ -424,17 +431,16 @@ KP.Game = class Game {
       }
       return;
     }
-    if(this.input.wasPressed('one')) buy('time',KP.Balance.shop.timePrice);
-    if(this.input.wasPressed('two')){
+    if(this.input.wasPressed('one')){
       const options=this.getShopAmmoOptions();
       if(!options.length){ this.toast('Нет оружия, под которое можно купить патроны.'); return; }
       this.ui.shopAmmoOpen=true;
-      this.toast('Выбери тип патронов цифрой 1–6.');
+      this.toast('Выбери тип патронов цифрой 1-6.');
     }
-    if(this.input.wasPressed('three')) buy('smg',KP.Balance.weapons.smg.price);
-    if(this.input.wasPressed('four')) buy('flamethrower',KP.Balance.weapons.flamethrower.price);
-    if(this.input.wasPressed('five')) buy('sabre',KP.Balance.weapons.sabre.price);
-    if(this.input.wasPressed('six')) buy('shotgun',KP.Balance.weapons.shotgun.price);
+    if(this.input.wasPressed('two')) buy('smg',KP.Balance.weapons.smg.price);
+    if(this.input.wasPressed('three')) buy('flamethrower',KP.Balance.weapons.flamethrower.price);
+    if(this.input.wasPressed('four')) buy('sabre',KP.Balance.weapons.sabre.price);
+    if(this.input.wasPressed('five')) buy('shotgun',KP.Balance.weapons.shotgun.price);
   }
 
   burst(x,y,color,count){

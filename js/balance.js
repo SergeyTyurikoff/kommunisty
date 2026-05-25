@@ -6,6 +6,7 @@ KP.Balance = {
     baseTimeDecay:0.010,
     combatDecayBonus:0.009,
     speed:.32,
+    runSpeed:1.95,
     jump:-8.4,
     turboDuration:300,
     turboCooldown:300,
@@ -20,8 +21,16 @@ KP.Balance = {
     drainRange:160,
     drainGainPerFrame:.26,
     drainEnemyDamagePerFrame:.24,
+    hitStunHits:5,
+    hitStunDuration:120,
+    hitStunResetFrames:240,
+    healPickupAmount:22,
     dodge:{ cost:8, duration:14, cooldown:58, speed:10.5, hitDmg:18, knock:10 },
     combo:{ window:130, thresholds:[1,4,8,14], multipliers:[1, 1.5, 2.2, 3.5] }
+  },
+  featureFlags:{
+    drain:false,
+    turbo:false
   },
   abilityUnlocks:[
     {id:'drain',        name:'Выкачивание времени', desc:'удерживай E/У рядом с врагом'},

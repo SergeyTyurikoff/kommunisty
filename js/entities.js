@@ -178,6 +178,13 @@ KP.Pickup = class Pickup extends KP.Entity {
       ctx.fillStyle='#65e8ff'; ctx.beginPath(); ctx.arc(this.x+11,yy+10,9,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(this.x+8,yy+7,3.5,2,-0.4,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='#06333c'; ctx.font='bold 12px Arial'; ctx.fillText('T',this.x+7,yy+15);
+    } else if(this.type==='heal'){
+      ctx.fillStyle='#3a0a0a'; ctx.beginPath(); ctx.arc(this.x+11,yy+11,11,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#d92d2d'; ctx.beginPath(); ctx.arc(this.x+11,yy+10,9,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.32)'; ctx.beginPath(); ctx.ellipse(this.x+8,yy+7,3.5,2,-0.4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff4f4';
+      ctx.fillRect(this.x+9,yy+4,4,12);
+      ctx.fillRect(this.x+5,yy+8,12,4);
     } else {
       // Ammo box — colour by type
       const colours={pistol:'#aaa',rifle:'#c89042',machinegun:'#6aaa44',shells:'#cc3322',fuel:'#ff7700'};
@@ -212,6 +219,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       laneBias:U.rand(-28,28),strafeBias:Math.random()<.5?-1:1,
       burstCd:55+Math.random()*70,burstTimer:0,underFireTimer:0,
       strafeTimer:24+Math.random()*40|0,attackFlash:0,deathTimer:0,lastDodgeSerial:-1,
+      stuckFrames:0,intentDir:0,intentMove:0,
       phase2:false,phase2Triggered:false,
       // Per-enemy abilities
       rollTimer:0,   rollCd:  kind==='runner'  ?(55+Math.random()*60|0):9999,
@@ -253,6 +261,12 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   clampTargetX(raw){ return KP.Utils.clamp(raw,this.patrolMin+this.w*.5,Math.max(this.patrolMin+this.w*.5,this.patrolMax-this.w*.5)); }
+  applyMove(dir,amount){
+    if(!dir||!amount) return;
+    this.vx+=dir*amount;
+    this.intentDir=dir;
+    this.intentMove=Math.max(this.intentMove,Math.abs(amount));
+  }
 
   shouldSupportAllies(game,p,abs){
     if(abs>this.detect*.82) return false;
@@ -296,6 +310,7 @@ KP.Enemy = class Enemy extends KP.Entity {
   jumpToward(dir,highArc=false,speedMul=1){
     this.vy=highArc?-10.9:-9.2;
     this.vx+=dir*this.speed*speedMul*1.9;
+    this.intentDir=dir||this.intentDir;
     this.jumpCd=74+Math.random()*56;
   }
 
@@ -397,6 +412,9 @@ KP.Enemy = class Enemy extends KP.Entity {
 
     const dx=(p.x+p.w/2)-(this.x+this.w/2);
     const abs=Math.abs(dx), dir=dx>0?1:-1;
+    const prevX=this.x;
+    this.intentDir=0;
+    this.intentMove=0;
     const sees=this.seePlayer(p);
     const allySupport=this.shouldSupportAllies(game,p,abs);
     const hearsShots=game.player.attackCd>0&&abs<this.detect*.95&&Math.abs((p.y+p.h/2)-(this.y+this.h/2))<220;
@@ -416,10 +434,26 @@ KP.Enemy = class Enemy extends KP.Entity {
     game.world.collide(this);
     if(this.floorY&&this.y>this.floorY-this.h+72){ this.y=this.floorY-this.h; this.vy=0; this.grounded=true; }
     this.enforcePatrolBounds();
+    this.resolveStuckState(prevX,p,abs);
     if(U.rects(this,p)&&this.meleeCd<=0){
       this.meleeCd=52;
       p.hurt(this.hitTime,this.x<p.x?1:-1,game);
     }
+  }
+
+  resolveStuckState(prevX,p,abs){
+    const moved=Math.abs(this.x-prevX);
+    const wantsMove=this.intentMove>.04&&this.grounded;
+    const meleeContact=!this.shoot&&abs<this.attackRange+22;
+    if(wantsMove&&moved<0.18&&!meleeContact) this.stuckFrames++;
+    else this.stuckFrames=Math.max(0,this.stuckFrames-2);
+    if(this.stuckFrames<18) return;
+    const breakDir=this.intentDir||(p.x+p.w/2>=this.x+this.w/2?1:-1)||this.facing;
+    this.vx=breakDir*Math.max(2.6,this.speed*18);
+    this.facing=breakDir;
+    if(this.canJump&&this.jumpCd<=0) this.jumpToward(breakDir,p.y+40<this.y,1.05);
+    this.memoryTimer=Math.max(this.memoryTimer,45);
+    this.stuckFrames=0;
   }
 
   runAggro(game,p,abs,dir,speedMul,sees){
@@ -430,20 +464,21 @@ KP.Enemy = class Enemy extends KP.Entity {
     const center=this.x+this.w/2;
     const pursueDir=rememberedX>=center?1:-1;
     const pressureFromFire=this.underFireTimer>0||(game.player.attackCd>0&&abs<this.detect*.95);
+    const meleeSettle=!this.shoot&&abs<=this.attackRange+26&&this.sameFloor(p);
     this.facing=pursueDir||dir||this.facing;
 
     if(this.shoot){
       const desiredKeep=Math.max(120,this.keepDistance+this.laneBias*.4);
-      if(pressureFromFire&&pressureOk) this.vx+=pursueDir*this.speed*speedMul*.95;
-      else if(abs<desiredKeep*.82) this.vx-=dir*this.speed*speedMul*.8;
-      else if(pressureOk&&abs>this.attackRange*.9) this.vx+=pursueDir*this.speed*speedMul*(sees?1.08:.7);
-      else if(pressureOk&&Math.abs(rememberedX-center)>28) this.vx+=pursueDir*this.speed*speedMul*.52;
+      if(pressureFromFire&&pressureOk) this.applyMove(pursueDir,this.speed*speedMul*.95);
+      else if(abs<desiredKeep*.82) this.applyMove(-dir,this.speed*speedMul*.8);
+      else if(pressureOk&&abs>this.attackRange*.9) this.applyMove(pursueDir,this.speed*speedMul*(sees?1.08:.7));
+      else if(pressureOk&&Math.abs(rememberedX-center)>28) this.applyMove(pursueDir,this.speed*speedMul*.52);
       else {
         if(this.strafeTimer<=0){
           this.strafeTimer=26+Math.random()*46|0;
           this.strafeBias*=-1;
         }
-        this.vx+=this.strafeBias*this.speed*speedMul*.52;
+        this.applyMove(this.strafeBias,this.speed*speedMul*.52);
       }
       this.shootCd--;
       if(this.shouldCombatJump(p,abs,true,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul);
@@ -451,8 +486,10 @@ KP.Enemy = class Enemy extends KP.Entity {
       if(canFire&&abs<this.attackRange&&this.shootCd<=0) this.fire(game,p);
     } else {
       const burst=this.updateBurst(abs);
-      if(pressureOk) this.vx+=pursueDir*this.speed*speedMul*burst*1.35*(pressureFromFire?1.18:1);
-      else if(this.memoryTimer>0) this.vx+=pursueDir*this.speed*speedMul*.55;
+      if(meleeSettle){
+        this.vx*=0.58;
+      } else if(pressureOk) this.applyMove(pursueDir,this.speed*speedMul*burst*1.35*(pressureFromFire?1.18:1));
+      else if(this.memoryTimer>0) this.applyMove(pursueDir,this.speed*speedMul*.55);
       if(this.shouldCombatJump(p,abs,false,canTrackVertical)) this.jumpToward(pursueDir,p.y+45<this.y,speedMul*burst);
     }
 
@@ -461,7 +498,7 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   runPatrol(speedMul){
-    this.vx+=this.facing*this.speed*speedMul*.52;
+    this.applyMove(this.facing,this.speed*speedMul*.52);
     if(Math.random()<.0035) this.facing*=-1;
   }
 
