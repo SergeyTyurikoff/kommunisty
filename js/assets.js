@@ -3,6 +3,22 @@ window.KP = window.KP || {};
 KP.Assets = class Assets {
   constructor(){
     this.images={};
+    this.spriteFrameCache=new Map();
+    this.animProfiles={
+      hero:{ mode:'split', split:.56, pad:14, bob:2.2, stepLift:4.6, stride:6.5, lean:.08, breath:1.4, wholeBob:1.1, recoil:3.8, squash:.04 },
+      zombie:{ mode:'split', split:.6, pad:12, bob:2.0, stepLift:3.6, stride:5.2, lean:.07, breath:1.0, wholeBob:.9, recoil:2.2, squash:.03 },
+      runner:{ mode:'split', split:.6, pad:12, bob:2.4, stepLift:4.8, stride:7.2, lean:.11, breath:1.1, wholeBob:1.1, recoil:2.8, squash:.04 },
+      pistol:{ mode:'split', split:.6, pad:12, bob:1.7, stepLift:3.2, stride:4.3, lean:.06, breath:.8, wholeBob:.8, recoil:3.4, squash:.03 },
+      gunner:{ mode:'split', split:.61, pad:12, bob:1.9, stepLift:3.1, stride:4.6, lean:.05, breath:.8, wholeBob:.8, recoil:3.8, squash:.03 },
+      miniboss:{ mode:'split', split:.62, pad:13, bob:2.0, stepLift:3.2, stride:4.4, lean:.05, breath:.9, wholeBob:1.0, recoil:3.0, squash:.03 },
+      horse:{ mode:'whole', pad:16, bob:2.6, stride:8.0, lean:.06, breath:1.0, wholeBob:1.4, recoil:2.0, squash:.035 },
+      mushroomBoss:{ mode:'whole', pad:18, bob:2.4, stride:5.5, lean:.04, breath:1.0, wholeBob:1.0, recoil:2.2, squash:.03 },
+      treeBoss:{ mode:'whole', pad:18, bob:2.0, stride:4.0, lean:.035, breath:.8, wholeBob:.8, recoil:1.8, squash:.025 },
+      sandBoss:{ mode:'whole', pad:18, bob:2.7, stride:6.5, lean:.055, breath:1.0, wholeBob:1.0, recoil:1.5, squash:.035 },
+      swampBoss:{ mode:'whole', pad:18, bob:2.2, stride:4.8, lean:.04, breath:.9, wholeBob:.9, recoil:2.0, squash:.03 },
+      factoryBoss:{ mode:'whole', pad:18, bob:1.6, stride:3.8, lean:.03, breath:.6, wholeBob:.7, recoil:2.1, squash:.02 },
+      lenin:{ mode:'whole', pad:16, bob:2.0, stride:4.2, lean:.05, breath:.9, wholeBob:.9, recoil:2.6, squash:.03 }
+    };
     this.load({
       hero:'img/sliced/units/hero_revolutionary.png',
       zombie:'img/sliced/units/mold_zombie_light.png',
@@ -62,6 +78,245 @@ KP.Assets = class Assets {
     return true;
   }
 
+  _makeCanvas(w,h){
+    const canvas=document.createElement('canvas');
+    canvas.width=w;
+    canvas.height=h;
+    return canvas;
+  }
+
+  _profileFor(id){
+    return this.animProfiles[id]||this.animProfiles.zombie;
+  }
+
+  _framesForState(state){
+    if(state==='run') return 8;
+    if(state==='idle') return 6;
+    if(state==='shoot') return 4;
+    if(state==='hurt') return 3;
+    if(state==='dead') return 5;
+    if(state==='dodge') return 4;
+    if(state==='jump'||state==='fall') return 2;
+    return 1;
+  }
+
+  _fpsForState(state){
+    if(state==='run') return 11;
+    if(state==='idle') return 5;
+    if(state==='shoot') return 16;
+    if(state==='hurt') return 14;
+    if(state==='dodge') return 14;
+    if(state==='jump'||state==='fall') return 5;
+    return 1;
+  }
+
+  _buildAnimatedFrames(id,w,h,state){
+    const img=this.images[id];
+    if(!img||!img.complete||!img.naturalWidth) return null;
+    const profile=this._profileFor(id);
+    const frameCount=this._framesForState(state);
+    const pad=profile.pad||12;
+    const iw=img.naturalWidth;
+    const ih=img.naturalHeight;
+    const frames=[];
+    for(let i=0;i<frameCount;i++){
+      const frame=this._makeCanvas(w+pad*2,h+pad*2);
+      const fctx=frame.getContext('2d');
+      fctx.imageSmoothingEnabled=false;
+      const phase=frameCount>1?(i/frameCount)*Math.PI*2:0;
+      const stride=Math.sin(phase)*(profile.stride||4);
+      const breath=Math.sin(phase)*(profile.breath||.6);
+      const bobBase=Math.abs(Math.sin(phase))*(profile.bob||1);
+      const p=pad;
+      if(profile.mode==='whole'){
+        let bodyY=p;
+        let lean=0;
+        let squashX=1;
+        let squashY=1;
+        let offsetX=0;
+        if(state==='idle'){
+          bodyY+=Math.sin(phase*.5)*(profile.wholeBob||.8);
+          lean=Math.sin(phase)*profile.lean*.35;
+        } else if(state==='run'){
+          bodyY+=bobBase;
+          offsetX=stride*.18;
+          lean=Math.sin(phase)*profile.lean;
+          squashX=1+Math.abs(Math.sin(phase))*(profile.squash||.02);
+          squashY=1-Math.abs(Math.sin(phase))*(profile.squash||.02);
+        } else if(state==='shoot'){
+          bodyY+=Math.sin(phase*1.5)*.8;
+          offsetX=-(profile.recoil||2)*(1-i/Math.max(1,frameCount-1));
+          lean=-profile.lean*.8;
+        } else if(state==='hurt'){
+          offsetX=(i%2===0?-1:1)*(profile.stride||4)*.35;
+          bodyY+=Math.max(0,1-i)*.8;
+          lean=(i%2===0?-1:1)*profile.lean*.8;
+        } else if(state==='dodge'){
+          offsetX=(i-(frameCount-1)/2)*(profile.stride||4)*.32;
+          bodyY-=Math.sin((i/frameCount)*Math.PI)*(profile.bob||1.5);
+          lean=-profile.lean*2.2;
+        } else if(state==='jump'){
+          bodyY-=4+i;
+          lean=-profile.lean*.9;
+          squashX=1.03;
+          squashY=.96;
+        } else if(state==='fall'){
+          bodyY-=1;
+          lean=profile.lean*.95;
+          squashX=.97;
+          squashY=1.03;
+        } else if(state==='dead'){
+          const t=i/Math.max(1,frameCount-1);
+          bodyY+=t*4;
+          lean=-1.18+t*.18;
+          offsetX=t*3;
+        }
+        fctx.save();
+        fctx.translate(p+w/2+offsetX,p+h);
+        fctx.rotate(lean);
+        fctx.scale(squashX,squashY);
+        fctx.translate(-w/2,-h);
+        fctx.drawImage(img,0,0,iw,ih,0,bodyY-p,w,h);
+        fctx.restore();
+      } else {
+        const split=profile.split||.58;
+        const srcSplit=Math.round(ih*split);
+        const dstSplit=Math.round(h*split);
+        let lowerX=0, lowerY=0, upperX=0, upperY=0, upperRot=0, upperScaleX=1, upperScaleY=1;
+        if(state==='idle'){
+          lowerY=Math.abs(Math.sin(phase))*Math.max(.4,(profile.stepLift||2)*.15);
+          upperY=-Math.abs(Math.sin(phase))*(profile.wholeBob||.8);
+          upperRot=Math.sin(phase)*profile.lean*.24;
+        } else if(state==='run'){
+          lowerX=stride*.55;
+          lowerY=Math.abs(Math.cos(phase))*(profile.stepLift||3);
+          upperX=-stride*.12;
+          upperY=-bobBase;
+          upperRot=Math.sin(phase)*profile.lean;
+          upperScaleX=1+Math.abs(Math.sin(phase))*(profile.squash||.02);
+          upperScaleY=1-Math.abs(Math.sin(phase))*(profile.squash||.02);
+        } else if(state==='shoot'){
+          const recoil=(profile.recoil||2)*(1-i/Math.max(1,frameCount-1));
+          lowerY=Math.abs(Math.sin(phase))*Math.max(.3,(profile.stepLift||2)*.08);
+          upperX=-recoil;
+          upperRot=-profile.lean*.62;
+        } else if(state==='hurt'){
+          upperX=(i%2===0?-1:1)*(profile.stride||4)*.3;
+          lowerX=-upperX*.5;
+          upperRot=(i%2===0?-1:1)*profile.lean*.8;
+        } else if(state==='dodge'){
+          lowerX=(i-(frameCount-1)/2)*(profile.stride||4)*.28;
+          lowerY=-Math.sin((i/frameCount)*Math.PI)*(profile.stepLift||3)*.35;
+          upperX=lowerX*.3;
+          upperRot=-profile.lean*2.1;
+        } else if(state==='jump'){
+          upperY=-5-i;
+          lowerY=-1.5;
+          upperRot=-profile.lean*.8;
+          upperScaleX=1.02;
+          upperScaleY=.97;
+        } else if(state==='fall'){
+          upperY=-1;
+          lowerY=1.2;
+          upperRot=profile.lean*.8;
+          upperScaleX=.98;
+          upperScaleY=1.03;
+        } else if(state==='dead'){
+          const t=i/Math.max(1,frameCount-1);
+          fctx.save();
+          fctx.translate(p+w/2+t*3,p+h);
+          fctx.rotate(-1.22+t*.2);
+          fctx.drawImage(img,0,0,iw,ih,-w/2,-h+t*4,w,h);
+          fctx.restore();
+          if(i===frameCount-1){
+            fctx.globalAlpha=.18;
+            fctx.fillStyle='#000';
+            fctx.fillRect(p+2,p+h+1,w-4,3);
+            fctx.globalAlpha=1;
+          }
+          frames.push(frame);
+          continue;
+        }
+
+        fctx.drawImage(img,0,srcSplit,iw,ih-srcSplit,p+lowerX,p+dstSplit+lowerY,w,h-dstSplit);
+        fctx.save();
+        fctx.translate(p+w/2+upperX,p+dstSplit+upperY);
+        fctx.rotate(upperRot);
+        fctx.scale(upperScaleX,upperScaleY);
+        fctx.translate(-w/2,-dstSplit);
+        fctx.drawImage(img,0,0,iw,srcSplit,0,0,w,dstSplit);
+        fctx.restore();
+      }
+      if(state==='hurt'){
+        fctx.save();
+        fctx.globalCompositeOperation='source-atop';
+        fctx.fillStyle='rgba(255,235,190,.32)';
+        fctx.fillRect(0,0,frame.width,frame.height);
+        fctx.restore();
+      }
+      frames.push(frame);
+    }
+    return {frames,pad};
+  }
+
+  _getAnimatedFrames(id,w,h,state){
+    const key=`${id}:${state}:${w}x${h}`;
+    if(!this.spriteFrameCache.has(key)){
+      const built=this._buildAnimatedFrames(id,w,h,state);
+      if(!built) return null;
+      this.spriteFrameCache.set(key,built);
+    }
+    return this.spriteFrameCache.get(key);
+  }
+
+  _drawAnimatedSprite(ctx,id,x,y,w,h,facing,state,freezeFrame=null){
+    const pack=this._getAnimatedFrames(id,w,h,state);
+    if(!pack||!pack.frames||!pack.frames.length) return false;
+    const totalW=w+pack.pad*2;
+    const totalH=h+pack.pad*2;
+    let frameIndex=freezeFrame;
+    if(frameIndex===null){
+      if(state==='dead') frameIndex=pack.frames.length-1;
+      else {
+        const fps=this._fpsForState(state);
+        frameIndex=Math.floor(performance.now()/1000*fps)%pack.frames.length;
+      }
+    }
+    const frame=pack.frames[Math.max(0,Math.min(pack.frames.length-1,frameIndex))];
+    ctx.save();
+    ctx.imageSmoothingEnabled=false;
+    if(facing<0){
+      ctx.translate(x+w+pack.pad,y-pack.pad);
+      ctx.scale(-1,1);
+      ctx.drawImage(frame,0,0,totalW,totalH);
+    } else {
+      ctx.drawImage(frame,x-pack.pad,y-pack.pad,totalW,totalH);
+    }
+    ctx.restore();
+    return true;
+  }
+
+  _playerAnimState(player){
+    if(player.dead) return 'dead';
+    if(player.stunTimer>0||player.invuln>24) return 'hurt';
+    if(player.dodgeTimer>0) return 'dodge';
+    if(!player.grounded) return player.vy<0?'jump':'fall';
+    if(player.attackFlash>0) return 'shoot';
+    if(Math.abs(player.vx)>1.25) return 'run';
+    return 'idle';
+  }
+
+  _enemyAnimState(e){
+    if(!e.alive) return 'dead';
+    if(e.rollTimer>0) return 'dodge';
+    if(e.hurt>0) return 'hurt';
+    if(!e.grounded) return e.vy<0?'jump':'fall';
+    if(e.attackFlash>0||e.sniperScope>0) return 'shoot';
+    if(e.ramTimer>0||e.lungeTimer>0||Math.abs(e.vx)>0.48) return 'run';
+    if(e.state==='aggro'&&Math.abs(e.vx)>0.12) return 'run';
+    return 'idle';
+  }
+
   _withFacing(ctx,x,y,w,facing,fn){
     ctx.save();
     if(facing<0){ ctx.translate(x+w,y); ctx.scale(-1,1); ctx.translate(-x,-y); }
@@ -104,16 +359,21 @@ KP.Assets = class Assets {
 
   drawHero(ctx,player){
     const x=player.x, y=player.y, facing=player.facing, weapon=player.weapon;
-    const phase=performance.now()/88+player.x*.03;
-    const airborne=!player.grounded;
-    const running=player.pose==='run';
-    const bob=player.dead?0:(airborne?-1.7:0);
-    const lean=player.dead?-0.85*facing:player.dodgeTimer>0?-0.45*facing:airborne?(player.vy<0?-0.03:0.05):player.attackFlash>0?0.02*facing:0;
     const heroW=36, heroH=52;
     ctx.fillStyle='rgba(0,0,0,.24)';
     ctx.beginPath();
     ctx.ellipse(x+17,y+58,17,5,0,0,Math.PI*2);
     ctx.fill();
+    const animState=this._playerAnimState(player);
+    if(this._drawAnimatedSprite(ctx,'hero',x-2,y+3,heroW,heroH,facing,animState)){
+      this.drawWeapon(ctx,{x,y,w:player.w,h:player.h,facing,attackFlash:player.attackFlash,pose:player.pose,grounded:player.grounded,vx:player.vx,vy:player.vy},weapon);
+      return;
+    }
+    const phase=performance.now()/88+player.x*.03;
+    const airborne=!player.grounded;
+    const running=player.pose==='run';
+    const bob=player.dead?0:(airborne?-1.7:0);
+    const lean=player.dead?-0.85*facing:player.dodgeTimer>0?-0.45*facing:airborne?(player.vy<0?-0.03:0.05):player.attackFlash>0?0.02*facing:0;
     this._actorTransform(ctx,player,bob,lean,player.dead?0.72:1);
     this._drawWalkerLegs(ctx,x,y,player.w,running?phase:phase*.45,airborne,'#1a1a1a','#070707');
     const drew=this.drawImg(ctx,'hero',x-2,y+3,heroW,heroH,facing<0);
@@ -160,6 +420,40 @@ KP.Assets = class Assets {
   }
 
   drawEnemy(ctx,e){
+    const shadowW=e.kind==='horse'?24:(KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss'?Math.max(26,e.w*.4):18);
+    ctx.fillStyle='rgba(0,0,0,.22)';
+    ctx.beginPath();
+    ctx.ellipse(e.x+e.w/2,e.y+e.h+2,shadowW,5.5,0,0,Math.PI*2);
+    ctx.fill();
+    const imageBackedKinds=['zombie','runner','pistol','gunner','horse','miniboss','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'];
+    if(imageBackedKinds.includes(e.kind)){
+      const sizeMap={
+        zombie:[44,58], runner:[44,58], pistol:[44,58], gunner:[55,60], horse:[78,52], miniboss:[62,64],
+        mushroomBoss:[110,92], treeBoss:[110,92], sandBoss:[110,92], swampBoss:[110,92], factoryBoss:[110,92], lenin:[88,92]
+      };
+      const offsMap={
+        zombie:[-3,2], runner:[-3,2], pistol:[-3,2], gunner:[-3,2], horse:[-6,4], miniboss:[-4,0],
+        mushroomBoss:[-10,-8], treeBoss:[-10,-8], sandBoss:[-10,-8], swampBoss:[-10,-8], factoryBoss:[-10,-8], lenin:[-2,-4]
+      };
+      const [dw,dh]=sizeMap[e.kind]||[e.w,e.h];
+      const [ox,oy]=offsMap[e.kind]||[0,0];
+      const state=this._enemyAnimState(e);
+      if(this._drawAnimatedSprite(ctx,e.kind,e.x+ox,e.y+oy,dw,dh,e.facing,state)){
+        if(e.attackFlash>0&&['pistol','gunner','miniboss','lenin'].includes(e.kind)){
+          this._withFacing(ctx,e.x,e.y,e.w,e.facing,()=>this._drawMuzzleFlash(ctx,e.x+e.w-2,e.y+26,9,e.kind==='lenin'?'#ffb54f':'#9dff54'));
+        }
+        if(e.kind==='lenin'&&e.ramTimer>0){
+          ctx.strokeStyle='#ff4040';
+          ctx.lineWidth=4;
+          ctx.beginPath();
+          ctx.moveTo(e.x+41,e.y+12);
+          ctx.lineTo(e.x+41+e.facing*80,e.y+12);
+          ctx.stroke();
+        }
+        if((e.kind==='lenin'||['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss'].includes(e.kind))&&e.turboTimer>0) this.drawTurboMark(ctx,e);
+        return;
+      }
+    }
     const phase=performance.now()/(Math.abs(e.vx)>0.55?78:118)+e.x*.018;
     const airborne=!e.grounded;
     const moving=e.alive&&Math.abs(e.vx)>0.55;
