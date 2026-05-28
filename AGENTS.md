@@ -1,70 +1,86 @@
-# Kommunisty Root Notes
+# Рабочий Контекст Kommunisty
 
-Version: `V 1.2.0`
+Версия: `V 1.2.0`
 
-This file replaces the old root `README.md` and is the first-stop context file for coding agents working in this repo.
+Этот файл заменяет старый корневой `README.md` и служит первым источником контекста для агента, который работает в репозитории.
 
-## Project
+## О проекте
 
-- Static HTML5 canvas action-platformer.
-- Entry point: `index.html`.
-- Main runtime code lives in `js/`.
-- The game starts from the intro menu, not directly in gameplay.
+- Это статическая HTML5 Canvas action-platformer игра без фреймворков.
+- Точка входа: `index.html`.
+- Основной runtime-код лежит в `js/`.
+- Игра стартует через главное меню, а не сразу в игровой сцене.
 
-## Key Files
+## Ключевые файлы
 
-- `js/game.js`: loop, level flow, camera, scene state.
-- `js/player.js`: movement, combat, abilities, time resource.
-- `js/entities.js`: enemies, bullets, pickups, particles.
-- `js/world.js`: biome layouts, platforms, collisions, spawns.
-- `js/assets.js`: image loading, sprite rendering, animation helpers.
-- `js/ui.js`: HUD, overlays, menus, inventory, end screens.
-- `js/audio.js`: music and sound effects.
-- `js/balance.js`: tuning and gameplay constants.
+- `js/game.js`: игровой цикл, камера, переходы между сценами и локациями.
+- `js/player.js`: движение героя, бой, способности, ресурс времени.
+- `js/entities.js`: враги, пули, частицы, предметы.
+- `js/world.js`: платформы, биомы, коллизии, спавны.
+- `js/assets.js`: загрузка изображений, рендер спрайтов, анимация.
+- `js/ui.js`: HUD, меню, инвентарь, экраны смерти и финала.
+- `js/audio.js`: музыка и звуковые эффекты.
+- `js/balance.js`: баланс и игровые константы.
 
-## Current Gameplay Notes
+## Текущее состояние игры
 
-- Six biomes with one boss biome each.
-- Time is both HP and a spendable ability resource.
-- Enemies should stay bound to their lane or platform.
-- Local smoke automation relies on `window.KP_TEST`.
+- В игре шесть биомов.
+- У каждого биома свой босс.
+- Время одновременно работает как здоровье и как расходуемый ресурс для способностей.
+- Враги должны оставаться на своей полосе или платформе.
+- Для локальной автоматизации и smoke-проверок используется `window.KP_TEST`.
 
-## Hero Animation Note
+## Анимация героя
 
-- Base hero idle/combat art still comes from `img/sliced/units/hero_revolutionary.png`.
-- Movement states now use dedicated sprites from `img/sliced/units/hero_move/`.
-- In `js/assets.js`, `run`, `jump`, and `fall` for the hero are image-backed; the rest of the states still use the existing procedural animation path.
+- Базовый спрайт героя для спокойных и боевых состояний лежит в `img/sliced/units/hero_revolutionary.png`.
+- Спрайты движения лежат в `img/sliced/units/hero_move/`.
+- В `js/assets.js` состояния `run`, `jump` и `fall` у героя теперь берутся из отдельных PNG.
+- Остальные состояния героя пока остаются на существующей процедурной анимации.
 
-## Run Locally
+## Локальный запуск
 
-- Preferred: `npm.cmd run serve`
-- Open: `http://127.0.0.1:4173`
-- If `node` is not in `PATH`, use the portable binary:
+- Основной вариант: `npm.cmd run serve`
+- Затем открыть: `http://127.0.0.1:4173`
+- Если `node` не прописан в `PATH`, использовать portable Node:
   `tools\node-v24.16.0-win-x64\node.exe tools\dev_server.js`
 
-## Checks
+## Проверки
 
-- Smoke test: `npm.cmd test`
-- Direct fallback:
+- Основной smoke-test: `npm.cmd test`
+- Прямой fallback:
   `tools\node-v24.16.0-win-x64\node.exe tests\playtest_smoke.js`
-- Before handoff, try a real launch plus a visual menu/gameplay sanity check.
+- Перед сдачей по возможности нужно:
+  запустить игру локально, открыть меню, начать игру и сделать хотя бы короткую визуальную проверку.
 
-## Controls
+## Управление
 
-- `A/D` or arrows: move
-- `W` or up arrow: jump
-- `S` or down arrow: drop through one-way platforms
-- `Mouse1` / `J`: attack
-- `E`: interact
-- `Q`: next weapon
-- `1-6`: slots
-- `Shift`: turbo
-- `F`: time stop
-- `R`: restart
+- `A/D` или стрелки: движение
+- `W` или стрелка вверх: прыжок
+- `S` или стрелка вниз: спуск через одностороннюю платформу
+- `Mouse1` / `J`: атака
+- `E`: взаимодействие
+- `Q`: следующее оружие
+- `1-6`: слоты
+- `Shift`: турбо
+- `F`: остановка времени
+- `R`: рестарт
 
-## Working Conventions
+## Короткие git-команды
 
-- Prefer extending the existing plain-JS architecture instead of adding new layers.
-- Keep assets local in the repo.
-- Preserve smoke-test compatibility when touching gameplay or browser APIs.
-- If version, controls, launch flow, or test commands change, update this file too.
+- `ком`: сделать коммит. Обычно это `git add ...` + `git commit -m "..."`.
+- `пуш`: отправить локальные коммиты на GitHub. Обычно это `git push origin master`.
+- `пул`: стянуть изменения с GitHub и сразу попытаться влить их в текущую ветку. Обычно это `git pull`.
+
+## Чем `git fetch` отличается от `git pull`
+
+- `git fetch` только забирает новые данные с удалённого репозитория, но не меняет твою текущую рабочую ветку.
+- После `git fetch` можно спокойно посмотреть, что изменилось, например через `git log HEAD..origin/master`.
+- `git pull` делает `fetch` и затем сразу пытается выполнить `merge` или `rebase` в текущую ветку.
+- Если нужен безопасный просмотр входящих изменений без немедленного слияния, лучше использовать `git fetch`.
+
+## Рабочие правила
+
+- Предпочитать развитие текущей простой архитектуры, а не добавление новых слоёв.
+- Держать ассеты внутри репозитория.
+- Не ломать совместимость smoke-тестов при изменениях в геймплее или browser API.
+- Если меняются версия, команды запуска, управление или процесс проверки, обновлять этот файл тоже.
