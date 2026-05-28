@@ -21,6 +21,11 @@ KP.Assets = class Assets {
     };
     this.load({
       hero:'img/sliced/units/hero_revolutionary.png',
+      heroRunContact:'img/sliced/units/hero_move/Run contact.png',
+      heroRunPassing:'img/sliced/units/hero_move/Run passing.png',
+      heroJumpUp:'img/sliced/units/hero_move/Jump up.png',
+      heroJumpApex:'img/sliced/units/hero_move/Jump apex.png',
+      heroFall:'img/sliced/units/hero_move/Fall.png',
       zombie:'img/sliced/units/mold_zombie_light.png',
       runner:'img/sliced/units/mold_zombie_light.png',
       pistol:'img/sliced/units/mold_zombie_light.png',
@@ -110,9 +115,132 @@ KP.Assets = class Assets {
     return 1;
   }
 
+  _buildHeroFrames(img,w,h,state){
+    const heroMoveFrames={
+      run:[
+        {id:'heroRunContact', offsetX:-1, offsetY:0},
+        {id:'heroRunPassing', offsetX:0, offsetY:-1},
+        {id:'heroRunContact', offsetX:-1, offsetY:0},
+        {id:'heroRunPassing', offsetX:0, offsetY:-1}
+      ],
+      jump:[
+        {id:'heroJumpUp', offsetX:0, offsetY:-1},
+        {id:'heroJumpApex', offsetX:0, offsetY:-3}
+      ],
+      fall:[
+        {id:'heroFall', offsetX:0, offsetY:0},
+        {id:'heroFall', offsetX:0, offsetY:1}
+      ]
+    };
+    const heroMoveState=heroMoveFrames[state];
+    if(heroMoveState){
+      const moveImages=heroMoveState.map((pose)=>this.images[pose.id]);
+      if(moveImages.some((moveImg)=>!moveImg||!moveImg.complete||!moveImg.naturalWidth)) return null;
+      const pad=14;
+      const frames=[];
+      for(let i=0;i<heroMoveState.length;i++){
+        const pose=heroMoveState[i];
+        const frame=this._makeCanvas(w+pad*2,h+pad*2);
+        const fctx=frame.getContext('2d');
+        const moveImg=moveImages[i];
+        fctx.imageSmoothingEnabled=false;
+        fctx.drawImage(moveImg,pad+(pose.offsetX||0),pad+(pose.offsetY||0),w,h);
+        frames.push(frame);
+      }
+      return {frames,pad};
+    }
+
+    const frameMap={
+      idle:[
+        {lowerX:0,lowerY:0,upperX:0,upperY:0,upperRot:0},
+        {lowerX:0,lowerY:1,upperX:-.5,upperY:-1,upperRot:-.01},
+        {lowerX:0,lowerY:0,upperX:.4,upperY:0,upperRot:.01},
+        {lowerX:0,lowerY:1,upperX:-.4,upperY:-1,upperRot:-.015}
+      ],
+      run:[
+        {lowerX:-5,lowerY:1,upperX:1,upperY:-1,upperRot:-.07},
+        {lowerX:-2,lowerY:3,upperX:0,upperY:-2,upperRot:-.03},
+        {lowerX:2,lowerY:1,upperX:-1,upperY:-1,upperRot:.02},
+        {lowerX:5,lowerY:0,upperX:-2,upperY:0,upperRot:.07},
+        {lowerX:2,lowerY:2,upperX:-1,upperY:-1,upperRot:.03},
+        {lowerX:-2,lowerY:1,upperX:0,upperY:0,upperRot:-.02}
+      ],
+      shoot:[
+        {lowerX:0,lowerY:0,upperX:-4,upperY:0,upperRot:-.07},
+        {lowerX:0,lowerY:0,upperX:-3,upperY:-1,upperRot:-.05},
+        {lowerX:0,lowerY:0,upperX:-2,upperY:0,upperRot:-.03},
+        {lowerX:0,lowerY:0,upperX:0,upperY:0,upperRot:0}
+      ],
+      hurt:[
+        {lowerX:-1,lowerY:0,upperX:2,upperY:0,upperRot:.08},
+        {lowerX:1,lowerY:0,upperX:-2,upperY:0,upperRot:-.08},
+        {lowerX:0,lowerY:1,upperX:1,upperY:-1,upperRot:.04}
+      ],
+      dodge:[
+        {lowerX:-6,lowerY:0,upperX:-2,upperY:-2,upperRot:-.22},
+        {lowerX:-2,lowerY:-2,upperX:-1,upperY:-4,upperRot:-.28},
+        {lowerX:3,lowerY:-1,upperX:1,upperY:-3,upperRot:-.18},
+        {lowerX:7,lowerY:0,upperX:2,upperY:-1,upperRot:-.08}
+      ],
+      jump:[
+        {lowerX:0,lowerY:-2,upperX:0,upperY:-5,upperRot:-.06},
+        {lowerX:1,lowerY:-3,upperX:-1,upperY:-6,upperRot:-.03}
+      ],
+      fall:[
+        {lowerX:1,lowerY:1,upperX:0,upperY:-1,upperRot:.05},
+        {lowerX:0,lowerY:2,upperX:0,upperY:0,upperRot:.08}
+      ],
+      dead:[
+        {dead:true,t:0},
+        {dead:true,t:.33},
+        {dead:true,t:.66},
+        {dead:true,t:1}
+      ]
+    };
+    const framesData=frameMap[state]||frameMap.idle;
+    const split=.56;
+    const pad=14;
+    const iw=img.naturalWidth;
+    const ih=img.naturalHeight;
+    const srcSplit=Math.round(ih*split);
+    const dstSplit=Math.round(h*split);
+    const frames=[];
+    for(const pose of framesData){
+      const frame=this._makeCanvas(w+pad*2,h+pad*2);
+      const fctx=frame.getContext('2d');
+      fctx.imageSmoothingEnabled=false;
+      if(pose.dead){
+        const t=pose.t||0;
+        fctx.save();
+        fctx.translate(pad+w/2+t*4,pad+h);
+        fctx.rotate(-1.18+t*.12);
+        fctx.drawImage(img,0,0,iw,ih,-w/2,-h+t*3.5,w,h);
+        fctx.restore();
+      } else {
+        fctx.drawImage(img,0,srcSplit,iw,ih-srcSplit,pad+(pose.lowerX||0),pad+dstSplit+(pose.lowerY||0),w,h-dstSplit);
+        fctx.save();
+        fctx.translate(pad+w/2+(pose.upperX||0),pad+dstSplit+(pose.upperY||0));
+        fctx.rotate(pose.upperRot||0);
+        fctx.translate(-w/2,-dstSplit);
+        fctx.drawImage(img,0,0,iw,srcSplit,0,0,w,dstSplit);
+        fctx.restore();
+      }
+      if(state==='hurt'){
+        fctx.save();
+        fctx.globalCompositeOperation='source-atop';
+        fctx.fillStyle='rgba(255,235,190,.28)';
+        fctx.fillRect(0,0,frame.width,frame.height);
+        fctx.restore();
+      }
+      frames.push(frame);
+    }
+    return {frames,pad};
+  }
+
   _buildAnimatedFrames(id,w,h,state){
     const img=this.images[id];
     if(!img||!img.complete||!img.naturalWidth) return null;
+    if(id==='hero') return this._buildHeroFrames(img,w,h,state);
     const profile=this._profileFor(id);
     const frameCount=this._framesForState(state);
     const pad=profile.pad||12;
