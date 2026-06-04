@@ -153,6 +153,71 @@ KP.Bullet = class Bullet extends KP.Entity {
   }
 };
 
+KP.GasCloud = class GasCloud extends KP.Entity {
+  constructor(owner,x,y,opts={}){
+    const radius=opts.radius||60;
+    super(x-radius,y-radius,radius*2,radius*2);
+    Object.assign(this,{
+      owner,
+      cx:x,
+      cy:y,
+      radius,
+      maxLife:opts.life||180,
+      life:opts.life||180,
+      tickDamage:opts.tickDamage||8,
+      color:opts.color||'#98d94a',
+      driftX:opts.driftX||0,
+      driftY:opts.driftY||0,
+      pulse:Math.random()*99
+    });
+  }
+  update(game){
+    this.pulse+=.11;
+    this.life--;
+    this.cx+=this.driftX;
+    this.cy+=this.driftY;
+    this.radius=Math.max(18,this.radius*.9985);
+    this.x=this.cx-this.radius;
+    this.y=this.cy-this.radius;
+    this.w=this.radius*2;
+    this.h=this.radius*2;
+    if(this.life<=0){ this.alive=false; return; }
+    if(this.owner==='player'){
+      for(const e of game.enemies){
+        if(!e.alive) continue;
+        const dist=Math.hypot((e.x+e.w/2)-this.cx,(e.y+e.h/2)-this.cy);
+        if(dist<this.radius+Math.max(e.w,e.h)*.24){
+          e.takeDamage(this.tickDamage,.4,this.cx,{targetX:this.cx},game);
+          game.onEnemyHit(e,true,this.tickDamage);
+        }
+      }
+      return;
+    }
+    const p=game.player;
+    const dist=Math.hypot((p.x+p.w/2)-this.cx,(p.y+p.h/2)-this.cy);
+    if(dist<this.radius+Math.max(p.w,p.h)*.24) p.applyGasDamage(this.tickDamage,this.cx<p.x?-1:1,game);
+  }
+  draw(ctx){
+    const alpha=Math.max(.08,this.life/this.maxLife*.34);
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    const pulse=1+Math.sin(this.pulse)*.08;
+    const grad=ctx.createRadialGradient(this.cx,this.cy,8,this.cx,this.cy,this.radius*pulse);
+    grad.addColorStop(0,'rgba(220,255,160,.42)');
+    grad.addColorStop(.45,'rgba(152,217,74,.30)');
+    grad.addColorStop(1,'rgba(50,90,18,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.arc(this.cx,this.cy,this.radius*pulse,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='rgba(66,110,22,.16)';
+    ctx.beginPath();
+    ctx.arc(this.cx+Math.sin(this.pulse)*5,this.cy-4,this.radius*.62,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
 KP.Pickup = class Pickup extends KP.Entity {
   constructor(x,y,type,amount=1,ammoType=null){
     super(x,y,22,22);
@@ -178,13 +243,20 @@ KP.Pickup = class Pickup extends KP.Entity {
       ctx.fillStyle='#65e8ff'; ctx.beginPath(); ctx.arc(this.x+11,yy+10,9,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(this.x+8,yy+7,3.5,2,-0.4,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='#06333c'; ctx.font='bold 12px Arial'; ctx.fillText('T',this.x+7,yy+15);
-    } else if(this.type==='heal'){
+    } else if(this.type==='heal'||this.type==='medkit'){
       ctx.fillStyle='#3a0a0a'; ctx.beginPath(); ctx.arc(this.x+11,yy+11,11,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='#d92d2d'; ctx.beginPath(); ctx.arc(this.x+11,yy+10,9,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='rgba(255,255,255,.32)'; ctx.beginPath(); ctx.ellipse(this.x+8,yy+7,3.5,2,-0.4,0,Math.PI*2); ctx.fill();
       ctx.fillStyle='#fff4f4';
       ctx.fillRect(this.x+9,yy+4,4,12);
       ctx.fillRect(this.x+5,yy+8,12,4);
+    } else if(this.type==='gasMask'){
+      ctx.fillStyle='#1d2618'; ctx.beginPath(); ctx.arc(this.x+11,yy+11,11,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#6d8d40'; ctx.beginPath(); ctx.arc(this.x+11,yy+10,9,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#dfe6cf'; ctx.fillRect(this.x+5,yy+9,12,6);
+      ctx.fillStyle='#2f3d20'; ctx.beginPath(); ctx.arc(this.x+8,yy+12,2.2,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x+14,yy+12,2.2,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#c2c8b2'; ctx.fillRect(this.x+9,yy+15,4,4);
     } else {
       // Ammo box — colour by type
       const colours={pistol:'#aaa',rifle:'#c89042',machinegun:'#6aaa44',shells:'#cc3322',fuel:'#ff7700'};
@@ -205,7 +277,14 @@ KP.Pickup = class Pickup extends KP.Entity {
 KP.Enemy = class Enemy extends KP.Entity {
   constructor(x,y,kind){
     const bossKinds=['lenin','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss'];
-    const size=kind==='horse'?[70,62]:kind==='shielder'?[50,56]:bossKinds.includes(kind)?[86,88]:kind==='miniboss'?[50,60]:[42,52];
+    const size=
+      kind==='horse'?[70,62]:
+      kind==='shielder'?[50,56]:
+      kind==='maxim'?[72,46]:
+      kind==='sabreur'?[46,58]:
+      bossKinds.includes(kind)?[86,88]:
+      kind==='miniboss'?[50,60]:
+      [42,52];
     super(x,y,size[0],size[1]);
     const b=KP.Balance.enemies[kind];
     Object.assign(this,{
@@ -223,7 +302,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       phase2:false,phase2Triggered:false,
       // Per-enemy abilities
       rollTimer:0,   rollCd:  kind==='runner'  ?(55+Math.random()*60|0):9999,
-      lungeCd:       kind==='zombie'   ?(75+Math.random()*80|0):9999,  lungeTimer:0,
+      lungeCd:       (kind==='zombie'||kind==='sabreur')?(75+Math.random()*80|0):9999,  lungeTimer:0,
       mbShieldTimer:0, mbShieldCd: kind==='miniboss'?(200+Math.random()*140|0):9999,
       sniperScope:0,
       explodeArmed:  kind==='kamikaze',
@@ -508,6 +587,13 @@ KP.Enemy = class Enemy extends KP.Entity {
     this.facing=pursueDir||dir||this.facing;
 
     if(this.shoot){
+      if(this.kind==='maxim'){
+        this.vx*=0.45;
+        this.facing=dir||this.facing;
+        this.shootCd--;
+        if((sees||this.memoryTimer>55)&&abs<this.attackRange&&this.shootCd<=0) this.fire(game,p);
+        return;
+      }
       const desiredKeep=Math.max(120,this.keepDistance+this.laneBias*.4);
       if(pressureFromFire&&pressureOk) this.applyMove(pursueDir,this.speed*speedMul*.95);
       else if(abs<desiredKeep*.82) this.applyMove(-dir,this.speed*speedMul*.8);
@@ -593,6 +679,12 @@ KP.Enemy = class Enemy extends KP.Entity {
       this.alertText='РЫВОК!'; this.alertTimer=40;
     }
 
+    if(this.kind==='sabreur'&&this.state==='aggro'&&this.lungeCd<=0&&abs<230&&this.grounded){
+      this.lungeTimer=18; this.lungeCd=78+Math.random()*42|0;
+      this.alertText='ШАШКА!'; this.alertTimer=40;
+      this.facing=dir;
+    }
+
     // Runner dodge-roll when under fire
     if(this.kind==='runner'&&this.rollCd<=0&&this.underFireTimer>60&&this.grounded&&Math.random()<.04){
       const dodgeDir=(Math.random()<.5?-1:1);
@@ -641,20 +733,55 @@ KP.Enemy = class Enemy extends KP.Entity {
     const tx=pc.x+(p.vx||0)*travelFrames*1.65;
     const ty=pc.y+(p.vy||0)*Math.min(10,travelFrames)*1.2;
     const dx=tx-c.x,dy=ty-c.y,len=Math.hypot(dx,dy)||1;
-    const bColor=this.kind==='sniper'?'#ffee44':this.kind==='kamikaze'?'#ff6600':'#76ff54';
-    const bSize=this.kind==='sniper'?14:10;
+    if(this.kind==='gasman'){
+      game.spawnGasCloud('enemy',tx,ty,{
+        life:185,
+        radius:62,
+        tickDamage:7.5,
+        color:'#98d94a',
+        driftX:(dx/len)*.22,
+        driftY:(dy/len)*.05
+      });
+      game.burst(tx,ty,'#98d94a',8);
+      return;
+    }
+    if(this.kind==='flamer'){
+      for(const spread of[-0.08,0,0.08]){
+        const vx=(dx/len*this.bulletSpeed)*Math.cos(spread)-(dy/len*this.bulletSpeed)*Math.sin(spread);
+        const vy=(dx/len*this.bulletSpeed)*Math.sin(spread)+(dy/len*this.bulletSpeed)*Math.cos(spread);
+        game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,vx,vy,{
+          dmg:Math.round(this.hitTime*.9),range:280,color:'#ff6a24',knock:1,size:14,flame:true
+        }));
+      }
+      return;
+    }
+    const bColor=
+      this.kind==='sniper'?'#ffee44':
+      this.kind==='rifleman'?'#ffcf7a':
+      this.kind==='maxim'?'#ffd44a':
+      this.kind==='kamikaze'?'#ff6600':
+      '#76ff54';
+    const bSize=this.kind==='sniper'?14:this.kind==='maxim'?8:10;
     game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,dx/len*this.bulletSpeed,dy/len*this.bulletSpeed,{
       dmg:this.hitTime,range:700,color:bColor,knock:4,size:bSize
     }));
     // Gunner burst: 2 extra spread shots
-    if(this.kind==='gunner'){
+    if(this.kind==='gunner'||this.kind==='maxim'){
       for(const sp of[-0.12,0.12]){
         const nx=dx/len*Math.cos(sp)-dy/len*Math.sin(sp);
         const ny=dx/len*Math.sin(sp)+dy/len*Math.cos(sp);
         game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,nx*this.bulletSpeed*.85,ny*this.bulletSpeed*.85,{
-          dmg:Math.round(this.hitTime*.65),range:580,color:'#ff9933',knock:1.5,size:8
+          dmg:Math.round(this.hitTime*(this.kind==='maxim'?.55:.65)),range:this.kind==='maxim'?620:580,color:this.kind==='maxim'?'#ffc933':'#ff9933',knock:1.5,size:8
         }));
       }
+    }
+    if(this.kind==='rifleman'&&Math.random()<.4){
+      const spread=(Math.random()-.5)*0.08;
+      const vx2=(dx/len*this.bulletSpeed)*Math.cos(spread)-(dy/len*this.bulletSpeed)*Math.sin(spread);
+      const vy2=(dx/len*this.bulletSpeed)*Math.sin(spread)+(dy/len*this.bulletSpeed)*Math.cos(spread);
+      game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,vx2,vy2,{
+        dmg:Math.round(this.hitTime*.72),range:720,color:'#ffe082',knock:2,size:8
+      }));
     }
     // Phase 2: double-tap at low HP
     if(this.phase2&&Math.random()<0.35){

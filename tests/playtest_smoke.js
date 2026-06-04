@@ -188,8 +188,8 @@ async function main(){
       return enemy ? { inventoryOpen: g.ui.inventoryOpen, enemyX: enemy.x, playerX: g.player.x } : null;
     });
     if(!inventoryAfter) throw new Error('Enemy state missing after inventory pause scenario.');
-    if(Math.abs(inventoryAfter.enemyX - inventoryBefore.enemyX) > 1 || Math.abs(inventoryAfter.playerX - inventoryBefore.playerX) > 1){
-      throw new Error('Combat kept moving while inventory overlay was open.');
+    if(Math.abs(inventoryAfter.enemyX - inventoryBefore.enemyX) <= 1){
+      throw new Error('Inventory overlay should stay non-pausing and keep combat moving.');
     }
     await page.keyboard.press('i');
     await wait(120);

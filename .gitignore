@@ -1,8 +1,63 @@
+# Node / web dependencies
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/
+.cache/
+
+# Temp files
 tmp/
+temp/
+*.tmp
 
-tools/*
-!tools/dev_server.js
+# Local tools and downloaded runtimes
+tools/
 
+# Playtest and test artifacts
 playtest-report/
+test-results/
+artifacts/
+screenshots/
+
+# Logs
 *.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+*_original_backup.js
+
+# Unity generated folders
+Library/
+Temp/
+Logs/
+Obj/
+Build/
+Builds/
+UserSettings/
+.vs/
+MemoryCaptures/
+Recordings/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Optional heavy source folders
+# Uncomment only if these folders are not source-of-truth assets.
+# img/imported/
+# img/references/

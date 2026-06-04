@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 window.KP = window.KP || {};
 KP.VERSION = 'V 1.2.0';
 KP.Game = class Game {
@@ -15,12 +15,13 @@ KP.Game = class Game {
     this.world=new KP.World(this.levelIndex);
     this.player=new KP.Player();
     this.enemies=[]; this.playerBullets=[]; this.enemyBullets=[];
-    this.pickups=[]; this.particles=[]; this.damageNumbers=[];
+    this.clouds=[]; this.pickups=[]; this.particles=[]; this.damageNumbers=[];
     this.kills=0; this.maxCombo=1;
     this.toastText=''; this.toastTimer=0;
     this.timeStopFrames=0; this.levelTransition=0;
     this.paused=false; this.deathStats=null;
     this.combatPressure=0;
+    this.biomeEntryHeroLevel=1;
     this.playerShotSignal={x:0,y:0,radius:0,timer:0,weaponType:null};
     this.frameId=0;
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
@@ -31,8 +32,9 @@ KP.Game = class Game {
 
   spawnLevel(){
     this.enemies=[]; this.playerBullets=[]; this.enemyBullets=[];
-    this.pickups=[]; this.particles=[]; this.damageNumbers=[];
+    this.clouds=[]; this.pickups=[]; this.particles=[]; this.damageNumbers=[];
     this.world.rushTriggers.forEach(t=>t.done=false);
+    if(Array.isArray(this.world.tutorialHints)) this.world.tutorialHints.forEach(t=>t.done=false);
 
     for(const sp of this.world.enemySpawns){
       const e=new KP.Enemy(sp.x,0,sp.kind);
@@ -44,10 +46,10 @@ KP.Game = class Game {
     const ammoTypes=Object.keys(KP.Balance.ammoTypes);
     const seed=this.levelIndex*17;
     for(let n=0;n<14;n++){
-      const type=n%3===0?'ammo':(n%5===0?'time':'money');
+      const type=n%4===0?'ammo':(n%6===0?'time':'money');
       const ammoType=type==='ammo'?ammoTypes[(n+seed)%ammoTypes.length]:null;
       const amount=type==='ammo'
-        ?(ammoType==='machinegun'?22:ammoType==='fuel'?18:ammoType==='shells'?4:8)
+        ?(ammoType==='machinegun'?22:ammoType==='fuel'?18:ammoType==='gas'?12:ammoType==='shells'?4:8)
         :(type==='time'?8:(KP.Utils.rand(2,8)|0));
       const px=350+n*160+(n%3)*40+(seed%20);
       this.pickups.push(new KP.Pickup(px,455,type,amount,ammoType));
@@ -57,15 +59,18 @@ KP.Game = class Game {
 
   applyBiomeScaling(e){
     const boss=KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss';
-    const hpScale=1+this.levelIndex*(boss?0.28:0.22);
-    const dmgScale=1+this.levelIndex*(boss?0.20:0.17);
-    const speedScale=1+this.levelIndex*(boss?0.06:0.10);
+    const entryLevel=Math.max(1,this.biomeEntryHeroLevel||1);
+    const levelBoost=Math.max(0,entryLevel-1);
+    const hpScale=1+this.levelIndex*(boss?0.18:0.14)+levelBoost*(boss?0.2:0.16);
+    const dmgScale=1+this.levelIndex*(boss?0.14:0.11)+levelBoost*(boss?0.13:0.10);
+    const speedScale=1+this.levelIndex*(boss?0.05:0.09)+levelBoost*(boss?0.015:0.02);
     e.hp=Math.round(e.hp*hpScale); e.maxHp=e.hp;
     e.hitTime=Math.round(e.hitTime*dmgScale);
     e.dmg=Math.round(e.dmg*dmgScale);
-    e.speed=+(e.speed*speedScale).toFixed(4);
+    e.speed=e.speed>0?+(e.speed*speedScale).toFixed(4):0;
     e.xp=Math.round(e.xp*(1+this.levelIndex*.14));
     e.moneyRange=e.moneyRange.map(v=>Math.round(v*(1+this.levelIndex*.18)));
+    e.enemyLevel=entryLevel;
   }
 
   loop(){
@@ -104,13 +109,11 @@ KP.Game = class Game {
     const nearEnemy=this.enemies.some(e=>e.alive&&Math.abs(e.x-this.player.x)<280&&Math.abs(e.y-this.player.y)<160);
     if(nearEnemy&&this.timeStopFrames<=0){
       this.combatPressure=Math.min(120,this.combatPressure+3);
-      this.player.time=KP.Utils.clamp(this.player.time-KP.Balance.player.combatDecayBonus,0,this.player.maxTime);
     } else {
       this.combatPressure=Math.max(0,this.combatPressure-2);
     }
 
     if(this.ui.shopOpen){ this.shopInput(); return; }
-    if(this.ui.inventoryOpen){ this.inventoryInput(); return; }
     if(this.input.wasPressed('interact')){
       const openedUi=this.interact();
       if(openedUi){ this.updateCamera(); this.updateParticles(); return; }
@@ -119,11 +122,13 @@ KP.Game = class Game {
     this.player.update(this);
     this.updateDodgeCollisions();
     this.updateCamera();
+    this.checkTutorial();
     this.checkPortal();
     this.checkRush();
     this.updateEnemies();
     this.resolveEntityCollisions();
     this.updateBullets();
+    this.updateClouds();
     this.updatePickups();
     this.updateParticles();
     this.updateDamageNumbers();
@@ -174,6 +179,7 @@ KP.Game = class Game {
     this.levelIndex=0;
     this.world=new KP.World(this.levelIndex);
     this.player.reset();
+    this.biomeEntryHeroLevel=this.player.level;
     this.kills=0; this.maxCombo=1;
     this.comboCount=0; this.comboTimer=0; this.comboMul=1;
     this.combatPressure=0;
@@ -193,6 +199,7 @@ KP.Game = class Game {
     if(this.levelIndex>=this.world.biomes.length-1){ this.ui.ending=true; return; }
     this.levelIndex++;
     this.world=new KP.World(this.levelIndex);
+    this.biomeEntryHeroLevel=this.player.level;
     this.player.x=80; this.player.y=380;
     this.player.vx=0; this.player.vy=0;
     this.player.jumpsLeft=this.player.abilities.doubleJump?2:1;
@@ -219,11 +226,11 @@ KP.Game = class Game {
   checkRush(){
     const rushKinds=[
       ['runner','zombie','pistol'],
-      ['runner','pistol','gunner'],
-      ['horse','runner','pistol'],
-      ['horse','gunner','miniboss'],
-      ['horse','gunner','shielder','sniper'],
-      ['miniboss','horse','gunner','shielder','kamikaze']
+      ['runner','pistol','gasman'],
+      ['horse','runner','rifleman','sabreur'],
+      ['horse','gunner','flamer','kamikaze'],
+      ['rifleman','gasman','maxim','shielder'],
+      ['miniboss','horse','maxim','shielder','kamikaze','sabreur']
     ];
     for(const t of this.world.rushTriggers) if(!t.done&&this.player.x>t.x){
       t.done=true;
@@ -330,6 +337,15 @@ KP.Game = class Game {
     this.enemyBullets=this.enemyBullets.filter(b=>b.alive&&this.visible(b,350,220));
   }
 
+  spawnGasCloud(owner,x,y,opts={}){
+    this.clouds.push(new KP.GasCloud(owner,x,y,opts));
+  }
+
+  updateClouds(){
+    for(const cloud of this.clouds) cloud.update(this);
+    this.clouds=this.clouds.filter(cloud=>cloud.alive);
+  }
+
   onEnemyHit(e,fromPlayer=true,dmg=0){
     if(!e.alive&&!e.counted){
       this.audio.play('enemyDown',0.95+Math.random()*0.08);
@@ -342,11 +358,12 @@ KP.Game = class Game {
         const allTypes=Object.keys(KP.Balance.ammoTypes);
         const relevant=allTypes.filter(at=>inv.some(id=>KP.Balance.weapons[id]&&KP.Balance.weapons[id].ammoType===at));
         const at=(relevant.length?relevant:allTypes)[Math.floor(Math.random()*(relevant.length||allTypes.length))];
-        const qty=at==='machinegun'?18:at==='fuel'?14:at==='shells'?3:7;
+        const qty=at==='machinegun'?18:at==='fuel'?14:at==='gas'?10:at==='shells'?3:7;
         this.pickups.push(new KP.Pickup(e.x+10,e.y,'ammo',qty,at));
       }
-      if(Math.random()<.16) this.pickups.push(new KP.Pickup(e.x+20,e.y,'heal',KP.Balance.player.healPickupAmount));
-      else if(Math.random()<.14) this.pickups.push(new KP.Pickup(e.x+20,e.y,'time',8));
+      if(Math.random()<.18) this.pickups.push(new KP.Pickup(e.x+20,e.y,'medkit',1));
+      else if(Math.random()<.10) this.pickups.push(new KP.Pickup(e.x+20,e.y,'time',8));
+      if(e.kind==='gasman'&&!this.player.items.gasMask&&Math.random()<.3) this.pickups.push(new KP.Pickup(e.x+16,e.y-8,'gasMask',1));
       if(e.kind==='lenin'){ this.ui.ending=true; this.toast('Ленин повержен. Время снова потекло вперёд.'); }
       return;
     }
@@ -359,7 +376,9 @@ KP.Game = class Game {
       if(KP.Utils.rects(p,this.player)){
         if(p.type==='money') this.player.money+=p.amount;
         if(p.type==='ammo') this.player.addAmmo(p.ammoType||'rifle',p.amount);
-        if(p.type==='time'||p.type==='heal') this.player.time=KP.Utils.clamp(this.player.time+p.amount,0,this.player.maxTime);
+        if(p.type==='time') this.player.heal(p.amount);
+        if(p.type==='heal'||p.type==='medkit') this.player.addItem('medkit',p.amount||1);
+        if(p.type==='gasMask') this.player.addItem('gasMask',1);
         this.audio.playPickup(p.type);
         p.alive=false;
       }
@@ -382,6 +401,17 @@ KP.Game = class Game {
     this.cameraY=KP.Utils.clamp(this.player.y-330,0,this.world.worldH-this.canvas.height);
   }
 
+  checkTutorial(){
+    if(!Array.isArray(this.world.tutorialHints)) return;
+    for(const hint of this.world.tutorialHints){
+      if(hint.done) continue;
+      if(this.player.x>=hint.x){
+        hint.done=true;
+        this.toast(hint.text);
+      }
+    }
+  }
+
   interact(){
     for(const s of this.world.shops) if(KP.Utils.near(this.player,s,125,130)){
       this.ui.shopOpen=s; this.ui.shopAmmoOpen=false; this.toast('Магазин открыт. Снабженец снова на смене.'); return true;
@@ -400,10 +430,14 @@ KP.Game = class Game {
     } else if(c.loot==='ammo'){
       this.player.addAmmo('rifle',12);
       this.player.addAmmo('pistol',18);
+      this.player.addAmmo('gas',8);
       this.toast('+патроны (винтовка + пистолет).');
     } else if(c.loot==='heal'){
-      this.pickups.push(new KP.Pickup(c.x+8,c.y-6,'heal',Math.round(KP.Balance.player.healPickupAmount*1.25)));
+      this.pickups.push(new KP.Pickup(c.x+8,c.y-6,'medkit',2));
       this.toast('Из сундука выпало лечение.');
+    } else if(c.loot==='gasMask'){
+      this.pickups.push(new KP.Pickup(c.x+8,c.y-6,'gasMask',1));
+      this.toast('В сундуке найден противогаз.');
     } else {
       if(!this.player.inventory.includes(c.loot)) this.player.inventory.push(c.loot);
       this.toast('Найдено оружие: '+KP.Balance.weapons[c.loot].name);
@@ -412,7 +446,7 @@ KP.Game = class Game {
 
   getShopAmmoOptions(){
     const seen=new Set();
-    const order=['pistol','rifle','machinegun','shells','fuel'];
+    const order=['pistol','rifle','machinegun','shells','fuel','gas'];
     const current=KP.Balance.weapons[this.player.weapon]&&KP.Balance.weapons[this.player.weapon].ammoType;
     if(current) seen.add(current);
     for(const id of this.player.inventory){
@@ -459,8 +493,9 @@ KP.Game = class Game {
     }
     if(this.input.wasPressed('two')) buy('smg',KP.Balance.weapons.smg.price);
     if(this.input.wasPressed('three')) buy('flamethrower',KP.Balance.weapons.flamethrower.price);
-    if(this.input.wasPressed('four')) buy('sabre',KP.Balance.weapons.sabre.price);
-    if(this.input.wasPressed('five')) buy('shotgun',KP.Balance.weapons.shotgun.price);
+    if(this.input.wasPressed('four')) buy('gasSprayer',KP.Balance.weapons.gasSprayer.price);
+    if(this.input.wasPressed('five')) buy('sabre',KP.Balance.weapons.sabre.price);
+    if(this.input.wasPressed('six')) buy('shotgun',KP.Balance.weapons.shotgun.price);
   }
 
   burst(x,y,color,count){
@@ -506,6 +541,7 @@ KP.Game = class Game {
     ctx.save();
     ctx.translate(-this.cameraX,-this.cameraY);
     this.world.draw(ctx,this.cameraX,this.cameraY,this.canvas.width,this.canvas.height,this.assets);
+    for(const cloud of this.clouds) if(this.visible(cloud,220,180)) cloud.draw(ctx);
     for(const p of this.pickups) if(this.visible(p)) p.draw(ctx);
     for(const b of this.playerBullets) b.draw(ctx);
     for(const b of this.enemyBullets) b.draw(ctx);
@@ -549,6 +585,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       const max=game.world.biomes.length-1;
       const safe=KP.Utils.clamp(index|0,0,max);
       game.levelIndex=safe; game.world=new KP.World(safe);
+      game.biomeEntryHeroLevel=game.player.level;
       game.player.x=80; game.player.y=380; game.player.dead=false;
       game.ui.ending=false; game.ui.shopOpen=null; game.ui.shopAmmoOpen=false; game.ui.inventoryOpen=false;
       game.timeStopFrames=0; game.levelTransition=0;
@@ -572,3 +609,4 @@ window.addEventListener('DOMContentLoaded',()=>{
     }
   };
 });
+

@@ -8,7 +8,8 @@ KP.Player = class Player extends KP.Entity {
     const features=KP.Balance.featureFlags||{};
     const ammoBag={}, maxAmmoBag={};
     for(const [id,a] of Object.entries(KP.Balance.ammoTypes)){
-      ammoBag[id]=a.start; maxAmmoBag[id]=a.max;
+      ammoBag[id]=a.start;
+      maxAmmoBag[id]=a.max;
     }
     Object.assign(this,{
       x:80,y:380,vx:0,vy:0,w:34,h:58,
@@ -17,12 +18,13 @@ KP.Player = class Player extends KP.Entity {
       ammoBag,maxAmmoBag,money:18,xp:0,level:1,xpNext:70,
       turbo:0,turboCd:0,weak:0,timeStopCd:0,
       weapon:'mosin',inventory:['pistol','mosin'],
+      utilitySlots:['medkit','gasMask',null,null,null,null],
+      items:{ medkit:1, gasMask:false, gasMaskActive:false },
       invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
       attackFlash:0,dodgeSerial:0,runHeld:false,
       enemyHitChain:0,enemyHitChainTimer:0,stunTimer:0,
-      // Dodge
+      gasTickCd:0,gasWarnTimer:0,
       dodgeTimer:0,dodgeCd:0,dodgeVx:0,
-      // Combo (tracked at game level but reset on player reset)
       abilities:{drain:!!features.drain,doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
     });
   }
@@ -38,8 +40,9 @@ KP.Player = class Player extends KP.Entity {
     if(this.stunTimer>0) this.stunTimer--;
     if(this.enemyHitChainTimer>0) this.enemyHitChainTimer--;
     else if(this.enemyHitChain>0) this.enemyHitChain=0;
+    if(this.gasTickCd>0) this.gasTickCd--;
+    if(this.gasWarnTimer>0) this.gasWarnTimer--;
 
-    this.time-=b.baseTimeDecay;
     if(features.turbo){
       if(this.turbo>0){
         this.turbo--;
@@ -64,7 +67,6 @@ KP.Player = class Player extends KP.Entity {
 
     if(!stunned&&input.wasPressed('timeStop')) this.tryTimeStop(game);
 
-    // Dodge roll
     if(!stunned&&input.wasPressed('dodge')){
       if(this.dodgeCd<=0&&this.time>b.dodge.cost){
         const dodgeSpd=b.dodge.speed*(this.abilities.finalResolve?1.25:1);
@@ -109,12 +111,14 @@ KP.Player = class Player extends KP.Entity {
 
     const maxJumps=this.abilities.doubleJump?2:1;
     if(!stunned&&input.wasPressed('up')&&this.jumpsLeft>0){
-      this.vy=b.jump; this.jumpsLeft--;
+      this.vy=b.jump;
+      this.jumpsLeft--;
       game.burst(this.x+this.w/2,this.y+this.h,'#ffd21c',8);
     }
     if(!stunned&&input.wasPressed('weaponNext')) this.nextWeapon(game);
-    const slots=[['one','pistol'],['two','mosin'],['three','smg'],['four','flamethrower'],['five','sabre'],['six','shotgun']];
-    if(!stunned) for(const [act,id] of slots) if(input.wasPressed(act)&&this.inventory.includes(id)) this.weapon=id;
+
+    const slotActions=['one','two','three','four','five','six'];
+    if(!stunned) for(let i=0;i<slotActions.length;i++) if(input.wasPressed(slotActions[i])) this.useUtilitySlot(i,game);
     if(!stunned&&input.wasPressed('inventory')) game.ui.inventoryOpen=!game.ui.inventoryOpen;
     if(!stunned&&(input.wasPressed('attack')||game.input.mouseDown)) this.attack(game);
 
@@ -142,6 +146,70 @@ KP.Player = class Player extends KP.Entity {
     if(this.time<=0){ this.time=0; this.dead=true; }
   }
 
+  heal(amount){
+    if(amount<=0) return 0;
+    const before=this.time;
+    this.time=KP.Utils.clamp(this.time+amount,0,this.maxTime);
+    return this.time-before;
+  }
+
+  addItem(id,amount=1){
+    if(id==='medkit'){
+      const meta=KP.Balance.items.medkit;
+      this.items.medkit=KP.Utils.clamp((this.items.medkit||0)+amount,0,meta.max);
+      return this.items.medkit;
+    }
+    if(id==='gasMask'){
+      this.items.gasMask=true;
+      return 1;
+    }
+    return 0;
+  }
+
+  useUtilitySlot(index,game){
+    const id=this.utilitySlots[index];
+    if(!id) return;
+    if(id==='medkit'){
+      if((this.items.medkit||0)<=0){
+        game.toast('В этом слоте нет аптечки.');
+        return;
+      }
+      if(this.time>=this.maxTime-1){
+        game.toast('Здоровье уже полное.');
+        return;
+      }
+      this.items.medkit--;
+      const healed=this.heal(KP.Balance.items.medkit.heal);
+      game.audio.playPickup('heal');
+      game.toast(`Аптечка использована: +${Math.round(healed)}. Осталось ${this.items.medkit}.`);
+      return;
+    }
+    if(id==='gasMask'){
+      if(!this.items.gasMask){
+        game.toast('Противогаз ещё не найден.');
+        return;
+      }
+      this.items.gasMaskActive=!this.items.gasMaskActive;
+      game.toast(this.items.gasMaskActive?'Противогаз надет. Газ больше не берёт.':'Противогаз снят.');
+    }
+  }
+
+  applyGasDamage(amount,dir,game){
+    if(this.items.gasMaskActive) return false;
+    if(this.gasTickCd>0||this.dead) return false;
+    this.gasTickCd=KP.Balance.player.gasTickFrames;
+    this.invuln=Math.max(this.invuln,8);
+    this.time-=amount;
+    this.vx+=dir*1.8;
+    if(this.gasWarnTimer<=0){
+      this.gasWarnTimer=KP.Balance.player.gasWarningFrames;
+      game.toast('Газ! Противогаз можно включить цифрой 2.');
+    }
+    if(game.audio) game.audio.play('playerHit',0.9+Math.random()*0.05,.52);
+    if(this.time<=0){ this.time=0; this.dead=true; }
+    return true;
+  }
+
   tryTimeStop(game){
     const b=KP.Balance.player;
     if(!this.abilities.timeStop){ game.toast('Остановка времени ещё не открыта.'); return; }
@@ -167,7 +235,8 @@ KP.Player = class Player extends KP.Entity {
         e.drainTime(game);
         if(!e.alive) game.onEnemyHit(e);
         this.time=KP.Utils.clamp(this.time+b.drainGainPerFrame,0,this.maxTime);
-        drained=true; this.draining=true;
+        drained=true;
+        this.draining=true;
       }
     }
     if(drained&&Math.random()<.22) game.burst(this.x+this.w/2,this.y+this.h/2,'#65e8ff',2);
@@ -226,19 +295,16 @@ KP.Player = class Player extends KP.Entity {
 
     if(w.type==='melee'){
       const hit={x:this.x+(this.facing>0?this.w:-w.range),y:this.y+8,w:w.range,h:this.h-6};
-      let hitAny=false;
       for(const e of game.enemies) if(e.alive&&KP.Utils.rects(hit,e)){
         e.takeDamage(dmg,w.knock+(this.abilities.meleeMastery?4:0),this.x,{targetX:this.x+this.w/2},game);
         game.onEnemyHit(e,true,dmg);
         game.registerHit(dmg);
         game.damageNumbers.push(new KP.DamageNumber(e.x+e.w/2,e.y,dmg,dmg>50));
-        hitAny=true;
       }
       game.burst(hit.x+hit.w/2,hit.y+20,w.color,10);
       return;
     }
 
-    const y=this.y+25;
     const sx=shotX, sy=shotY;
     if(w.type==='shotgun'){
       const count=w.pellets||5;
@@ -253,6 +319,19 @@ KP.Player = class Player extends KP.Entity {
       return;
     }
 
+    if(w.type==='gas'){
+      game.spawnGasCloud('player',sx+aim.x*72,sy+aim.y*20,{
+        life:w.cloudLife,
+        radius:w.cloudRadius,
+        tickDamage:w.cloudTick,
+        color:w.color,
+        driftX:aim.x*.55,
+        driftY:aim.y*.1
+      });
+      game.burst(sx,sy,w.color,6);
+      return;
+    }
+
     const flame=w.type==='flame';
     game.playerBullets.push(new KP.Bullet('player',sx,sy,w.speed*aim.x,w.speed*aim.y,{
       dmg,range:w.range,color:w.color,knock:w.knock,flame,burn:w.burn,burnDps:w.burnDps,size:flame?18:9,pierce:flame,ammoType
@@ -263,8 +342,7 @@ KP.Player = class Player extends KP.Entity {
 
   registerEnemyHit(game){
     const b=KP.Balance.player;
-    if(this.dead) return;
-    if(this.stunTimer>0) return;
+    if(this.dead||this.stunTimer>0) return;
     this.enemyHitChainTimer=b.hitStunResetFrames;
     this.enemyHitChain++;
     if(this.enemyHitChain<b.hitStunHits) return;
@@ -278,8 +356,10 @@ KP.Player = class Player extends KP.Entity {
 
   hurt(timeLoss,dir,game=null){
     if(this.invuln>0) return;
-    this.time-=timeLoss; this.invuln=42;
-    this.vx+=dir*7; this.vy=-3.5;
+    this.time-=timeLoss;
+    this.invuln=42;
+    this.vx+=dir*7;
+    this.vy=-3.5;
     if(game){
       if(this.time<=0) game.audio.play('playerDown',1);
       else game.audio.play('playerHit',0.96+Math.random()*0.08);
@@ -291,10 +371,12 @@ KP.Player = class Player extends KP.Entity {
   gainXP(game,amount){
     this.xp+=amount;
     while(this.xp>=this.xpNext){
-      this.xp-=this.xpNext; this.level++;
+      this.xp-=this.xpNext;
+      this.level++;
       this.xpNext=Math.round(this.xpNext*1.4+30);
-      this.maxTime+=12; this.time=Math.min(this.maxTime,this.time+38);
-      for(const t of Object.keys(this.maxAmmoBag)) this.maxAmmoBag[t]+=t==='machinegun'?18:t==='fuel'?14:6;
+      this.maxTime+=12;
+      this.time=Math.min(this.maxTime,this.time+38);
+      for(const t of Object.keys(this.maxAmmoBag)) this.maxAmmoBag[t]+=t==='machinegun'?18:t==='fuel'?14:t==='gas'?10:6;
       game.toast(`Уровень ${this.level}: больше времени и боезапаса.`);
     }
   }
@@ -319,22 +401,39 @@ KP.Player = class Player extends KP.Entity {
     if(this.invuln>0&&Math.floor(this.invuln/5)%2===0) return;
     if(this.turbo>0){
       ctx.fillStyle='rgba(255,138,28,.28)';
-      ctx.beginPath(); ctx.ellipse(this.x+17-this.facing*16,this.y+32,22,38,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(this.x+17-this.facing*16,this.y+32,22,38,0,0,Math.PI*2);
+      ctx.fill();
     }
     if(this.weak>0){
       ctx.fillStyle='rgba(80,80,80,.25)';
-      ctx.beginPath(); ctx.ellipse(this.x+17,this.y+32,24,40,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(this.x+17,this.y+32,24,40,0,0,Math.PI*2);
+      ctx.fill();
     }
     if(this.stunTimer>0){
-      ctx.strokeStyle='rgba(255,210,28,.75)'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.arc(this.x+17,this.y+22,18,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle='rgba(255,210,28,.75)';
+      ctx.lineWidth=3;
+      ctx.beginPath();
+      ctx.arc(this.x+17,this.y+22,18,0,Math.PI*2);
+      ctx.stroke();
       ctx.fillStyle='rgba(255,210,28,.9)';
       ctx.fillRect(this.x+11,this.y-10,4,4);
       ctx.fillRect(this.x+20,this.y-14,4,4);
     }
     if(this.draining){
-      ctx.strokeStyle='#65e8ff'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2); ctx.stroke();
+      ctx.strokeStyle='#65e8ff';
+      ctx.lineWidth=3;
+      ctx.beginPath();
+      ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2);
+      ctx.stroke();
+    }
+    if(this.items.gasMaskActive){
+      ctx.strokeStyle='rgba(150,217,74,.75)';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(this.x+17,this.y+26,20,0,Math.PI*2);
+      ctx.stroke();
     }
     assets.drawHero(ctx,this);
     const ratio=KP.Utils.clamp(this.time/this.maxTime,0,1);

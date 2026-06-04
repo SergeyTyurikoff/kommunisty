@@ -112,6 +112,7 @@ KP.AudioSystem = class AudioSystem {
       mosin:'rifle',
       smg:'smg',
       flamethrower:'flame',
+      gasSprayer:'flame',
       sabre:'sabre',
       shotgun:'shotgun'
     };
@@ -124,6 +125,7 @@ KP.AudioSystem = class AudioSystem {
   playPickup(type){
     if(type==='money') return this.play('pickupMoney',1+Math.random()*0.08);
     if(type==='ammo') return this.play('pickupAmmo',.96+Math.random()*0.12);
-    if(type==='time'||type==='heal') return this.play('pickupTime',.92+Math.random()*0.06);
+    if(type==='time'||type==='heal'||type==='medkit') return this.play('pickupTime',.92+Math.random()*0.06);
+    if(type==='gasMask') return this.play('pickupAmmo',1.05,.7);
   }
 };

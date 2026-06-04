@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 window.KP = window.KP || {};
 KP.UI = class UI {
   constructor(){
@@ -149,6 +149,72 @@ KP.UI = class UI {
       ctx.font='bold 18px Arial';
       ctx.fillText(`ВРЕМЯ СТОИТ: ${Math.ceil(game.timeStopFrames/60)}с`,18,84);
     }
+    this.weaponRack(ctx,game);
+    this.quickSlots(ctx,game);
+  }
+
+  weaponRack(ctx,game){
+    const p=game.player;
+    const x=16, y=394, w=248, h=154;
+    ctx.fillStyle='rgba(9,9,9,.84)';
+    ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='rgba(255,210,28,.32)';
+    ctx.lineWidth=1.5;
+    ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='#ffd21c';
+    ctx.font='bold 15px Arial';
+    ctx.fillText('ОРУЖИЕ  Q',x+14,y+22);
+    let yy=y+46;
+    for(const id of p.inventory){
+      const weapon=KP.Balance.weapons[id];
+      const active=id===p.weapon;
+      if(active){
+        ctx.fillStyle='rgba(180,0,0,.34)';
+        ctx.fillRect(x+10,yy-16,w-20,26);
+      }
+      ctx.fillStyle=active?'#fff1bf':'#efefef';
+      ctx.font='bold 13px Arial';
+      ctx.fillText(`${active?'▶':'•'} ${weapon.name}`,x+16,yy);
+      const ammoType=weapon.ammoType;
+      ctx.fillStyle='#8fb5c8';
+      ctx.font='11px Arial';
+      ctx.fillText(ammoType?`${p.ammoBag[ammoType]}/${p.maxAmmoBag[ammoType]} ${KP.Balance.ammoTypes[ammoType].short}`:'без патронов',x+138,yy);
+      yy+=22;
+    }
+  }
+
+  quickSlots(ctx,game){
+    const p=game.player;
+    const x=288, y=506, slotW=112, slotH=46, gap=8;
+    const labels={
+      medkit:{title:'Аптечка', value:`x${p.items.medkit||0}`},
+      gasMask:{title:'Противогаз', value:p.items.gasMask?(p.items.gasMaskActive?'ВКЛ':'ВЫКЛ'):'нет'}
+    };
+    for(let i=0;i<6;i++){
+      const id=p.utilitySlots[i];
+      const sx=x+i*(slotW+gap);
+      ctx.fillStyle='rgba(8,8,8,.84)';
+      ctx.fillRect(sx,y,slotW,slotH);
+      ctx.strokeStyle=id?'rgba(101,232,255,.28)':'rgba(255,255,255,.12)';
+      ctx.lineWidth=1.2;
+      ctx.strokeRect(sx,y,slotW,slotH);
+      ctx.fillStyle='#9ec8ff';
+      ctx.font='bold 11px Arial';
+      ctx.fillText(String(i+1),sx+8,y+14);
+      if(!id){
+        ctx.fillStyle='#555';
+        ctx.font='12px Arial';
+        ctx.fillText('пусто',sx+34,y+28);
+        continue;
+      }
+      const meta=labels[id];
+      ctx.fillStyle='#f0efe8';
+      ctx.font='bold 12px Arial';
+      ctx.fillText(meta.title,sx+26,y+18);
+      ctx.fillStyle=id==='gasMask'&&p.items.gasMaskActive?'#98d94a':'#c5d1da';
+      ctx.font='12px Arial';
+      ctx.fillText(meta.value,sx+26,y+34);
+    }
   }
 
   shop(ctx,game){
@@ -163,8 +229,9 @@ KP.UI = class UI {
       ['1','ammo','Боеприпасы: выбрать тип','под оружие из инвентаря'],
       ['2','smg','Пулемёт',KP.Balance.weapons.smg.desc],
       ['3','flamethrower','Огнемёт',KP.Balance.weapons.flamethrower.desc],
-      ['4','sabre','Шашка',KP.Balance.weapons.sabre.desc],
-      ['5','shotgun','Обрез',KP.Balance.weapons.shotgun.desc]
+      ['4','gasSprayer','Газомет',KP.Balance.weapons.gasSprayer.desc],
+      ['5','sabre','Шашка',KP.Balance.weapons.sabre.desc],
+      ['6','shotgun','Обрез',KP.Balance.weapons.shotgun.desc]
     ];
     let yy=192;
     for(const [slot,id,title,desc] of items){
@@ -225,7 +292,7 @@ KP.UI = class UI {
       ctx.fillStyle='#888'; ctx.font='12px Arial'; ctx.fillText(weapon.desc,730,y+16);
       y+=46;
     }
-    ctx.fillStyle='#666'; ctx.font='12px Arial'; ctx.fillText('Q — следующее  |  1-6 — прямой выбор',706,444);
+    ctx.fillStyle='#666'; ctx.font='12px Arial'; ctx.fillText('Q — следующее оружие  |  1-6 — предметы',706,444);
   }
 
   mainMenu(ctx,game){
@@ -272,8 +339,8 @@ KP.UI = class UI {
       const lines=[
         'A/D или Ф/В — ходьба | Shift — бег',
         'W/↑ — прыжок | S/↓ — спуск через платформу',
-        'ЛКМ/J/О — атака | Q — смена оружия | 1-6 — слот',
-        'Z/Я — перекат | E — взаимодействие | I — инвентарь',
+        'ЛКМ/J/О — атака | Q — смена оружия | 1-6 — быстрые слоты',
+        'Z/Я — перекат | E — взаимодействие | I — расширить инвентарь',
         'F — стоп-время | Esc — пауза | R — рестарт',
         'Турбо и выкачивание времени временно отключены'
       ];
@@ -296,7 +363,7 @@ KP.UI = class UI {
   dead(ctx,game){
     ctx.fillStyle='rgba(0,0,0,.82)'; ctx.fillRect(0,0,1024,576);
     ctx.textAlign='center';
-    ctx.fillStyle='#cc0000'; ctx.font='bold 46px Arial'; ctx.fillText('ВРЕМЯ ФЕЛИКСА ИСТЕКЛО',512,148);
+    ctx.fillStyle='#cc0000'; ctx.font='bold 46px Arial'; ctx.fillText('ФЕЛИКС ПАЛ',512,148);
     if(game&&game.deathStats){
       const s=game.deathStats;
       ctx.fillStyle='rgba(30,10,5,.75)'; ctx.fillRect(280,180,464,180);
@@ -337,3 +404,5 @@ KP.UI = class UI {
     ctx.fillText('ПЕРЕХОД В НОВЫЙ БИОМ',512,285); ctx.textAlign='left';
   }
 };
+
+

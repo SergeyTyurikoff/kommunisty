@@ -8,6 +8,7 @@ KP.World = class World {
     this.bgIds=['forestBg','winterBg','desertBg','swampBg','cityBg','mausoleumBg'];
     this.platforms=[]; this.walls=[]; this.doors=[]; this.chests=[]; this.shops=[];
     this.acid=[]; this.rushTriggers=[]; this.portal=null; this.enemySpawns=[];
+    this.tutorialHints=[];
     this.crates=[];
     this.build();
   }
@@ -26,46 +27,75 @@ KP.World = class World {
 
   build(){
     const i=this.levelIndex;
+    const tutorial=i===0;
+    if(tutorial) this.levelW=2240;
     const ground=this.addPlatform(0,485,this.levelW,80,'ground');
 
     const sky=[];
-    for(let n=0;n<12;n++){
+    for(let n=0;n<(tutorial?7:12);n++){
       const x=170+n*230, y=390-(n%3)*38;
       sky.push(this.addPlatform(x,y,175,18,'sky'));
       if(n%3===1) sky.push(this.addPlatform(x+95,y-76,155,18,'sky'));
     }
     const high1=this.addPlatform(700,285,240,18,'sky');
-    const high2=this.addPlatform(1550,292,255,18,'sky');
-    const high3=this.addPlatform(2380,300,240,18,'sky');
+    const high2=this.addPlatform(tutorial?1350:1550,292,255,18,'sky');
+    const high3=this.addPlatform(tutorial?1860:2380,300,240,18,'sky');
 
     this.shops.push({x:185,y:415,w:70,h:70,name:`Снабженец: ${this.biomeName()}`});
 
-    this.chests.push({x:760,  y:444,w:38,h:26,open:false,loot:i%3===0?'heal':(i%2===0?'money':'ammo')});
-    this.chests.push({x:1320, y:444,w:38,h:26,open:false,loot:['sabre','smg','shotgun','money','ammo','flamethrower'][i]||'money'});
-    this.chests.push({x:1980, y:444,w:38,h:26,open:false,loot:['money','heal','sabre','smg','shotgun','heal'][i]||'money'});
+    if(tutorial){
+      this.chests.push({x:730,y:444,w:38,h:26,open:false,loot:'heal'});
+      this.chests.push({x:1260,y:444,w:38,h:26,open:false,loot:'gasMask'});
+      this.chests.push({x:1710,y:444,w:38,h:26,open:false,loot:'money'});
+    } else {
+      this.chests.push({x:760,  y:444,w:38,h:26,open:false,loot:i%3===0?'heal':(i%2===0?'money':'ammo')});
+      this.chests.push({x:1320, y:444,w:38,h:26,open:false,loot:['sabre','smg','gasSprayer','shotgun','ammo','flamethrower'][i]||'money'});
+      this.chests.push({x:1980, y:444,w:38,h:26,open:false,loot:['money','heal','sabre','gasSprayer','shotgun','heal'][i]||'money'});
+    }
 
     // Crates — destructible, spread across level
-    const crateXs=[540,880,1180,1520,1840,2200,2480];
+    const crateXs=tutorial?[560,980,1460]:[540,880,1180,1520,1840,2200,2480];
     for(const cx of crateXs){
       this.crates.push(new KP.Crate(cx,449));
     }
 
-    this.rushTriggers.push({x:1120,done:false,floorY:485,wave:0});
-    this.rushTriggers.push({x:1840,done:false,floorY:485,wave:1});
-    this.rushTriggers.push({x:2520,done:false,floorY:485,wave:2});
-    this.portal={x:2960,y:395,w:70,h:90,active:true};
+    if(!tutorial){
+      this.rushTriggers.push({x:1120,done:false,floorY:485,wave:0});
+      this.rushTriggers.push({x:1840,done:false,floorY:485,wave:1});
+      this.rushTriggers.push({x:2520,done:false,floorY:485,wave:2});
+    } else {
+      this.tutorialHints.push({x:90,text:'Иди вправо и прыгай на платформы. Первый биом короткий и учебный.',done:false});
+      this.tutorialHints.push({x:520,text:'Стреляй мышью. Q меняет оружие, цифры 1-6 теперь для предметов.',done:false});
+      this.tutorialHints.push({x:1160,text:'Аптечки уходят в инвентарь. Используй их цифрой 1.',done:false});
+      this.tutorialHints.push({x:1620,text:'В конце будет быстрый враг. Держи темп и реагируй сразу.',done:false});
+    }
+    this.portal={x:tutorial?2040:2960,y:395,w:70,h:90,active:true};
 
     this.buildEnemySpawns([ground,high1,high2,high3,...sky]);
   }
 
   buildEnemySpawns(platforms){
+    if(this.levelIndex===0){
+      const ground=platforms.find(p=>p.type==='ground');
+      if(ground){
+        [
+          {x:760,kind:'zombie'},
+          {x:1120,kind:'pistol'},
+          {x:1490,kind:'zombie'},
+          {x:1860,kind:'runner'}
+        ].forEach(sp=>{
+          this.enemySpawns.push({x:sp.x,floorY:ground.y,min:Math.max(620,sp.x-120),max:Math.min(1980,sp.x+120),kind:sp.kind,platformType:'ground'});
+        });
+      }
+      return;
+    }
     const normalByLevel=[
       ['zombie','runner','pistol'],
-      ['zombie','runner','pistol','kamikaze'],
-      ['runner','horse','pistol','kamikaze'],
-      ['zombie','runner','gunner','miniboss','kamikaze'],
-      ['pistol','gunner','shielder','miniboss','sniper'],
-      ['zombie','runner','gunner','horse','shielder','miniboss','sniper','kamikaze']
+      ['zombie','runner','pistol','gasman'],
+      ['runner','rifleman','sabreur','gasman','horse'],
+      ['runner','gunner','flamer','sabreur','kamikaze'],
+      ['rifleman','flamer','gasman','maxim','shielder','miniboss'],
+      ['gunner','rifleman','maxim','horse','shielder','sniper','kamikaze','sabreur']
     ][this.levelIndex]||['zombie'];
 
     const add=(p,xFrac,kind,radius=125)=>{
@@ -93,7 +123,7 @@ KP.World = class World {
     });
 
     const bossKind=['mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'][this.levelIndex];
-    this.enemySpawns.push({x:2700,floorY:485,min:2520,max:2860,kind:bossKind,platformType:'ground'});
+    if(bossKind) this.enemySpawns.push({x:2700,floorY:485,min:2520,max:2860,kind:bossKind,platformType:'ground'});
   }
 
   solid(){ return [...this.platforms]; }
