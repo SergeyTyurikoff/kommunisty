@@ -61,3 +61,25 @@ Thumbs.db
 # Uncomment only if these folders are not source-of-truth assets.
 # img/imported/
 # img/references/
+
+# Local Obsidian project notes live in the parent knowledge repo.
+Blender/
+Unity версия/
+Архив/
+Прототип браузерный/
+Core Loop.md
+GDD.md
+UI UX.md
+Баланс.md
+Враги.md
+Задачи-кандидаты.md
+Идеи.md
+Коммунисты против.md
+Лор.md
+Механики.md
+Музыка и звук.md
+Персонажи.md
+План перехода на Unity.md
+Постмортем.md
+Решения.md
+Уровни.md
