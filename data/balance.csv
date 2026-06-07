@@ -16,7 +16,7 @@ enemy,runner,runner,68,0.16,9,34,,ближний,role melee,"xp 18, деньги
 enemy,pistol,pistol,90,0.075,14,365,105,стрелок,role ranged,"xp 23, деньги 7-14"
 enemy,gunner,gunner,118,0.068,8,455,44,стрелок,role ranged,"xp 34, деньги 9-18"
 enemy,rifleman,rifleman,98,0.092,10,470,36,стрелок,role ranged,"xp 28, деньги 8-16"
-enemy,gasman,gasman,108,0.072,7,310,74,стрелок,role ranged,"xp 34, деньги 10-19"
+enemy,gasman,gasman,108,0.11,7,155,74,стрелок,role ranged,"xp 34, деньги 10-19"
 enemy,sabreur,sabreur,104,0.19,18,56,,ближний,role melee,"xp 30, деньги 8-16"
 enemy,horse,horse,160,0.27,20,44,,ближний,role charger,"xp 48, деньги 16-32"
 enemy,kamikaze,kamikaze,55,0.2,50,42,,ближний,role melee,"xp 28, деньги 4-10"

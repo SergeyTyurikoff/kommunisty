@@ -91,7 +91,7 @@ KP.Crate = class Crate extends KP.Entity {
   _dropLoot(game){
     const r=Math.random();
     const px=this.x+8, py=this.y;
-    if(r<0.38) game.pickups.push(new KP.Pickup(px,py,'money',KP.Utils.rand(10,28)|0));
+    if(r<0.38) game.pickups.push(new KP.Pickup(px,py,'money',Math.max(1,Math.round(KP.Utils.rand(10,28)*KP.Balance.economy.moneyMult))));
     else if(r<0.65){
       const inv=game.player.inventory;
       const allTypes=Object.keys(KP.Balance.ammoTypes);
@@ -439,6 +439,8 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   shouldCombatJump(p,abs,ranged=false,canTrackVertical=false){
+    // Прыгать к игроку должны только пешие зомби без оружия.
+    if(this.kind!=='zombie'&&this.kind!=='runner') return false;
     if(!this.canJump||!this.grounded||this.jumpCd>0) return false;
     const playerHigher=p.y+50<this.y&&abs<250;
     const pressureHop=!ranged&&abs<105;

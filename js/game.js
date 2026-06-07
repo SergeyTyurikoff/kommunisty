@@ -1,6 +1,6 @@
 ﻿'use strict';
 window.KP = window.KP || {};
-KP.VERSION = 'V 1.3.0';
+KP.VERSION = 'V 1.4.0';
 KP.Game = class Game {
   constructor(){
     this.canvas=document.getElementById('game');
@@ -155,6 +155,7 @@ KP.Game = class Game {
     }
 
     this.player.update(this);
+    this.updateStomp();
     this.updateDodgeCollisions();
     this.updateCamera();
     this.checkTutorial();
@@ -333,17 +334,10 @@ KP.Game = class Game {
   }
 
   spawnRushWave(t){
-    const rushKinds=[
-      ['runner','zombie','pistol'],
-      ['runner','pistol','gasman'],
-      ['horse','runner','rifleman','sabreur'],
-      ['horse','gunner','gasman','kamikaze'],
-      ['rifleman','gasman','maxim','shielder'],
-      ['miniboss','horse','maxim','shielder','kamikaze','sabreur']
-    ];
     const wave=t.wave||0;
-    const kinds=rushKinds[this.levelIndex]||rushKinds[0];
-    const count=3+wave*2+Math.min(3,this.levelIndex);
+    // Раш — только пешие зомби без оружия (зомби + быстрые бегуны).
+    const kinds=['zombie','zombie','runner'];
+    const count=4+wave*2+Math.min(4,this.levelIndex);
     const min=KP.Utils.clamp((t.clockX||this.player.x+180)-180,760,this.world.worldW-600);
     const max=Math.min(min+480,this.world.worldW-120);
     const messages=['Противник давит!','Волна подкрепления!','Последний рубеж!'];
@@ -473,7 +467,7 @@ KP.Game = class Game {
       e.counted=true; this.kills++;
       this.deathFx(e);
       if(e.fromWave&&this.waveObjective&&this.waveObjective.type==='kill') this.waveObjective.progress++;
-      const m=KP.Utils.rand(e.moneyRange[0],e.moneyRange[1])|0;
+      const m=Math.max(1,Math.round(KP.Utils.rand(e.moneyRange[0],e.moneyRange[1])*KP.Balance.economy.moneyMult));
       this.player.gainXP(this,e.xp);
       this.pickups.push(new KP.Pickup(e.x+e.w/2,e.y+e.h/2,'money',m));
       if(Math.random()<.45){
@@ -484,7 +478,7 @@ KP.Game = class Game {
         const qty=at==='machinegun'?18:at==='fuel'?14:at==='gas'?10:at==='shells'?3:7;
         this.pickups.push(new KP.Pickup(e.x+10,e.y,'ammo',qty,at));
       }
-      if(Math.random()<.18) this.pickups.push(new KP.Pickup(e.x+20,e.y,'medkit',1));
+      if(Math.random()<KP.Balance.economy.medkitDropChance) this.pickups.push(new KP.Pickup(e.x+20,e.y,'medkit',1));
       else if(Math.random()<.10) this.pickups.push(new KP.Pickup(e.x+20,e.y,'time',8));
       if(e.kind==='gasman'&&!this.player.items.gasMask&&Math.random()<.3) this.pickups.push(new KP.Pickup(e.x+16,e.y-8,'gasMask',1));
       if(e.kind==='lenin'){ this.ui.ending=true; this.toast('Ленин повержен. Время снова потекло вперёд.'); }
@@ -600,8 +594,9 @@ KP.Game = class Game {
 
   openChest(c){
     if(c.loot==='money'){
-      this.player.money+=45;
-      this.toast('+45 денег из сундука.');
+      const m=Math.round(45*KP.Balance.economy.moneyMult);
+      this.player.money+=m;
+      this.toast(`+${m} денег из сундука.`);
     } else if(c.loot==='ammo'){
       this.player.addAmmo('rifle',12);
       this.player.addAmmo('pistol',18);
@@ -686,6 +681,28 @@ KP.Game = class Game {
     );
     const timer=weaponMeta.type==='melee'?16:(weaponMeta.type==='flame'?34:48);
     this.playerShotSignal={x,y,radius,timer,weaponType:weaponMeta.type||'gun'};
+  }
+
+  // Прыжок на врага сверху: урон + отскок, без потери здоровья (боссов не топчем).
+  updateStomp(){
+    const p=this.player, cfg=KP.Balance.player.stomp;
+    if(p.dead||p.grounded||p.vy<=1) return;
+    const feet=p.y+p.h;
+    for(const e of this.enemies){
+      if(!e.alive) continue;
+      if(KP.Balance.enemies[e.kind]&&KP.Balance.enemies[e.kind].role==='boss') continue;
+      if(feet>e.y && feet<e.y+e.h*0.6 && p.x+p.w>e.x+4 && p.x<e.x+e.w-4){
+        const dmg=cfg.dmg*(p.abilities.finalResolve?1.15:1);
+        e.takeDamage(dmg,cfg.knock,p.x+p.w/2,{targetX:p.x+p.w/2},this);
+        this.registerHit(dmg);
+        this.damageNumbers.push(new KP.DamageNumber(e.x+e.w/2,e.y,dmg,true));
+        this.onEnemyHit(e,true,dmg);
+        this.burst(e.x+e.w/2,e.y,'#ffd21c',12);
+        p.vy=cfg.bounce; p.invuln=Math.max(p.invuln,16);
+        this.hitStop(2); this.shake(5,3);
+        break;
+      }
+    }
   }
 
   updateDodgeCollisions(){

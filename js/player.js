@@ -22,7 +22,7 @@ KP.Player = class Player extends KP.Entity {
       invuln:0,attackCd:0,dead:false,draining:false,dropTimer:0,
       attackFlash:0,dodgeSerial:0,runHeld:false,
       enemyHitChain:0,enemyHitChainTimer:0,stunTimer:0,
-      gasTickCd:0,gasWarnTimer:0,
+      gasSlowTimer:0,gasWarnTimer:0,gasMaskTimer:0,gasMaskCd:0,
       dodgeTimer:0,dodgeCd:0,dodgeVx:0,
       wasGrounded:false,landTimer:0,
       abilities:{doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
@@ -41,8 +41,13 @@ KP.Player = class Player extends KP.Entity {
     if(this.landTimer>0) this.landTimer--;
     if(this.enemyHitChainTimer>0) this.enemyHitChainTimer--;
     else if(this.enemyHitChain>0) this.enemyHitChain=0;
-    if(this.gasTickCd>0) this.gasTickCd--;
+    if(this.gasSlowTimer>0) this.gasSlowTimer--;
     if(this.gasWarnTimer>0) this.gasWarnTimer--;
+    // Противогаз: 3 c действия, затем 5 c откат.
+    if(this.gasMaskTimer>0){
+      this.gasMaskTimer--;
+      if(this.gasMaskTimer<=0){ this.items.gasMaskActive=false; this.gasMaskCd=b.gasMaskCooldown; game.toast('Противогаз снят, откат 5 секунд.'); }
+    } else if(this.gasMaskCd>0) this.gasMaskCd--;
 
     // Турбо (клавиша C/С): единственный режим, который тратит здоровье.
     if(this.turbo>0){
@@ -81,7 +86,7 @@ KP.Player = class Player extends KP.Entity {
     }
 
     const left=input.isDown('left'), right=input.isDown('right');
-    const speedMul=(this.runHeld?b.runSpeed:1)*(this.turbo>0?b.turboSpeed:1)*(this.weak>0?b.weakSpeed:1);
+    const speedMul=(this.runHeld?b.runSpeed:1)*(this.turbo>0?b.turboSpeed:1)*(this.weak>0?b.weakSpeed:1)*(this.gasSlowTimer>0?b.gasSlowMul:1);
 
     if(this.dodgeTimer>0){
       this.dodgeTimer--;
@@ -188,28 +193,26 @@ KP.Player = class Player extends KP.Entity {
       return;
     }
     if(id==='gasMask'){
-      if(!this.items.gasMask){
-        game.toast('Противогаз ещё не найден.');
-        return;
-      }
-      this.items.gasMaskActive=!this.items.gasMaskActive;
-      game.toast(this.items.gasMaskActive?'Противогаз надет. Газ больше не берёт.':'Противогаз снят.');
+      if(!this.items.gasMask){ game.toast('Противогаз ещё не найден.'); return; }
+      if(this.gasMaskTimer>0){ game.toast('Противогаз уже надет.'); return; }
+      if(this.gasMaskCd>0){ game.toast(`Противогаз на откате: ${Math.ceil(this.gasMaskCd/60)} c.`); return; }
+      this.gasMaskTimer=KP.Balance.player.gasMaskDuration;
+      this.items.gasMaskActive=true;
+      game.audio.playPickup('gasMask');
+      game.toast('Противогаз надет на 3 секунды.');
     }
   }
 
   applyGasDamage(amount,dir,game){
-    if(this.items.gasMaskActive) return false;
-    if(this.gasTickCd>0||this.dead) return false;
-    this.gasTickCd=KP.Balance.player.gasTickFrames;
-    this.invuln=Math.max(this.invuln,8);
-    this.time-=amount;
-    this.vx+=dir*1.8;
+    // Газ больше НЕ снимает здоровье — только замедляет (зона контроля).
+    if(this.items.gasMaskActive||this.dead) return false;
+    const b=KP.Balance.player;
+    this.gasSlowTimer=Math.max(this.gasSlowTimer,b.gasSlowFrames);
+    this.vx+=dir*0.6;
     if(this.gasWarnTimer<=0){
-      this.gasWarnTimer=KP.Balance.player.gasWarningFrames;
-      game.toast('Газ! Противогаз можно включить цифрой 2.');
+      this.gasWarnTimer=b.gasWarningFrames;
+      game.toast('Газ замедляет! Противогаз — цифра 2 (3 c, откат 5 c).');
     }
-    if(game.audio) game.audio.play('playerHit',0.9+Math.random()*0.05,.52);
-    if(this.time<=0){ this.time=0; this.dead=true; }
     return true;
   }
 
@@ -421,6 +424,10 @@ KP.Player = class Player extends KP.Entity {
       ctx.beginPath();
       ctx.arc(this.x+17,this.y+30,58,0,Math.PI*2);
       ctx.stroke();
+    }
+    if(this.gasSlowTimer>0&&!this.items.gasMaskActive){
+      ctx.fillStyle='rgba(120,200,60,.18)';
+      ctx.beginPath(); ctx.ellipse(this.x+17,this.y+30,22,38,0,0,Math.PI*2); ctx.fill();
     }
     if(this.items.gasMaskActive){
       ctx.strokeStyle='rgba(150,217,74,.75)';

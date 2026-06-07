@@ -15,15 +15,23 @@ KP.Balance = {
     weakDamage:.68,
     timeStopDuration:300,
     timeStopCooldown:420,   // стоп-время теперь без затрат здоровья, ограничено откатом
-    gasTickFrames:18,
     gasWarningFrames:170,
+    // Газ больше НЕ отнимает здоровье у ГГ — только замедляет (зона контроля).
+    gasSlowFrames:26,
+    gasSlowMul:.5,
+    // Противогаз: 3 c действия, 5 c отката.
+    gasMaskDuration:180,
+    gasMaskCooldown:300,
     hitStunHits:5,
     hitStunDuration:120,
     hitStunResetFrames:240,
     healPickupAmount:22,
     dodge:{ cost:0, duration:14, cooldown:58, speed:10.5, hitDmg:18, knock:10 }, // перекат бесплатный, ограничен откатом
+    // Прыжок на врага сверху: урон + отскок, без потери здоровья.
+    stomp:{ dmg:30, knock:13, bounce:-7.6 },
     combo:{ window:130, thresholds:[1,4,8,14], multipliers:[1,1.5,2.2,3.5] }
   },
+  economy:{ moneyMult:.5, medkitDropChance:.26 },
   // Способности открываются по входу в биом: abilityUnlocks[levelIndex].
   // Биом 0 (Лес) — стартовый, без новой способности.
   abilityUnlocks:[
@@ -59,7 +67,7 @@ KP.Balance = {
     pistol:      { hp:90,  speed:.075, dmg:14, hitTime:8,  xp:23,  money:[7,14],    detect:560, attackRange:365, shoot:true,  fireDelay:105, keepDistance:240, bulletSpeed:4.6, jump:true,  weight:1.1,  role:'ranged',  patrol:'floor' },
     gunner:      { hp:118, speed:.068, dmg:8,  hitTime:5,  xp:34,  money:[9,18],    detect:620, attackRange:455, shoot:true,  fireDelay:44,  keepDistance:310, bulletSpeed:5.4, jump:false, weight:1.25, role:'ranged',  patrol:'floor' },
     rifleman:    { hp:98,  speed:.092, dmg:10, hitTime:7,  xp:28,  money:[8,16],    detect:620, attackRange:470, shoot:true,  fireDelay:36,  keepDistance:280, bulletSpeed:6.2, jump:true,  weight:1.05, role:'ranged',  patrol:'floor' },
-    gasman:      { hp:108, speed:.072, dmg:7,  hitTime:6,  xp:34,  money:[10,19],   detect:560, attackRange:310, shoot:true,  fireDelay:74,  keepDistance:190, bulletSpeed:4.1, jump:false, weight:1.2,  role:'ranged',  patrol:'floor' },
+    gasman:      { hp:108, speed:.11,  dmg:7,  hitTime:6,  xp:34,  money:[10,19],   detect:560, attackRange:155, shoot:true,  fireDelay:74,  keepDistance:80,  bulletSpeed:4.1, jump:false, weight:1.2,  role:'ranged',  patrol:'floor' },
     sabreur:     { hp:104, speed:.19,  dmg:18, hitTime:11, xp:30,  money:[8,16],    detect:520, attackRange:56,  shoot:false, fireDelay:0,   keepDistance:0,   bulletSpeed:0,   jump:true,  weight:1.05, role:'melee',   patrol:'floor' },
     horse:       { hp:160, speed:.27,  dmg:20, hitTime:13, xp:48,  money:[16,32],   detect:600, attackRange:44,  shoot:false, fireDelay:0,   keepDistance:0,   bulletSpeed:0,   jump:true,  weight:1.8,  role:'charger', patrol:'floor' },
     kamikaze:    { hp:55,  speed:.20,  dmg:50, hitTime:50, xp:28,  money:[4,10],    detect:500, attackRange:42,  shoot:false, fireDelay:0,   keepDistance:0,   bulletSpeed:0,   jump:true,  weight:.65, role:'melee',   patrol:'floor', explodeRadius:100, explodeDmg:50 },

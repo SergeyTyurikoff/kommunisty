@@ -60,9 +60,9 @@ KP.World = class World {
     }
 
     if(!tutorial){
-      this.rushTriggers.push({x:1120,done:false,floorY:485,wave:0});
-      this.rushTriggers.push({x:1840,done:false,floorY:485,wave:1});
-      this.rushTriggers.push({x:2520,done:false,floorY:485,wave:2});
+      // 1 раш на биом; на последнем (Мавзолей, i===5) — 2.
+      this.rushTriggers.push({x:1500,done:false,floorY:485,wave:0});
+      if(i===5) this.rushTriggers.push({x:2520,done:false,floorY:485,wave:1});
     } else {
       this.tutorialHints.push({x:90,text:'Иди вправо и прыгай на платформы. Первый биом короткий и учебный.',done:false});
       this.tutorialHints.push({x:520,text:'Стреляй мышью. Q меняет оружие, цифры 1-6 теперь для предметов.',done:false});

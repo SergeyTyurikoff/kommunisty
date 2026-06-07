@@ -201,7 +201,7 @@ KP.UI = class UI {
     const x=288, y=506, slotW=112, slotH=46, gap=8;
     const labels={
       medkit:{title:'Аптечка', value:`x${p.items.medkit||0}`},
-      gasMask:{title:'Противогаз', value:p.items.gasMask?(p.items.gasMaskActive?'ВКЛ':'ВЫКЛ'):'нет'}
+      gasMask:{title:'Противогаз', value:!p.items.gasMask?'нет':(p.gasMaskTimer>0?`ВКЛ ${Math.ceil(p.gasMaskTimer/60)}с`:(p.gasMaskCd>0?`откат ${Math.ceil(p.gasMaskCd/60)}с`:'готов'))}
     };
     for(let i=0;i<6;i++){
       const id=p.utilitySlots[i];
@@ -350,7 +350,7 @@ KP.UI = class UI {
       ctx.fillStyle='#f2dfc7'; ctx.font='15px Arial';
       const lines=[
         'A/D или Ф/В — ходьба | Shift — бег',
-        'W/↑ — прыжок | S/↓ — спуск через платформу',
+        'W/↑ — прыжок (сверху на врага — урон) | S/↓ — спуск через платформу',
         'ЛКМ/J/О — атака | Q — смена оружия | 1-6 — аптечка/противогаз',
         'Z/Я — перекат | E — взаимодействие | I — расширить инвентарь',
         'C/С — ТУРБО (жжёт здоровье) | F/А — стоп-время',
