@@ -21,6 +21,8 @@ tools/node-*/
 tools/*-win-x64/
 # Локальный бэкап оригиналов спрайтов (тяжёлый, не нужен в репо)
 tools/hero_move_backup/
+# Сырой архив ассет-пака (нарезанные спрайты лежат в img/sprites/)
+img/communists_vs_mold_assets_v1_3_0/
 
 # Playtest and test artifacts
 playtest-report/

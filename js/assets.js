@@ -24,27 +24,29 @@ KP.Assets = class Assets {
       lenin:{ mode:'whole', pad:16, bob:2.0, stride:4.2, lean:.05, breath:.9, wholeBob:.9, recoil:2.6, squash:.03 }
     };
     this.load({
-      hero:'img/sliced/units/hero_revolutionary.png',
-      heroRunContact:'img/sliced/units/hero_move/Run contact.png',
-      heroRunPassing:'img/sliced/units/hero_move/Run passing.png',
-      heroJumpUp:'img/sliced/units/hero_move/Jump up.png',
-      heroJumpApex:'img/sliced/units/hero_move/Jump apex.png',
-      heroFall:'img/sliced/units/hero_move/Fall.png',
-      zombie:'img/sliced/units/mold_zombie_light.png',
-      runner:'img/sliced/units/mold_zombie_light.png',
-      pistol:'img/sliced/units/mold_zombie_light.png',
-      gunner:'img/sliced/units/mold_gunner.png',
-      horse:'img/sliced/units/cavalry_enemy.png',
-      miniboss:'img/sliced/units/mold_officer.png',
+      // Персонажи (asset-pack v1.3.0, фон вычищен)
+      hero:'img/sprites/characters/hero.png',
+      zombie:'img/sprites/characters/zombie.png',
+      runner:'img/sprites/characters/runner.png',
+      pistol:'img/sprites/characters/mold_pistol_soldier.png',
+      gunner:'img/sprites/characters/gunner.png',
+      rifleman:'img/sprites/characters/rifleman.png',
+      gasman:'img/sprites/characters/gasman.png',
+      sniper:'img/sprites/characters/sniper.png',
+      sabreur:'img/sprites/characters/sabreur.png',
+      horse:'img/sprites/characters/horse.png',
+      kamikaze:'img/sprites/characters/kamikaze.png',
+      shielder:'img/sprites/characters/shielder.png',
+      maxim:'img/sprites/characters/maxim.png',
+      miniboss:'img/sprites/characters/miniboss.png',
 
-      mushroomBoss:'img/sliced/bosses/mushroom_boss.png',
-      treeBoss:'img/sliced/bosses/tree_boss.png',
-      sandBoss:'img/sliced/bosses/sandworm_boss.png',
-      swampBoss:'img/sliced/bosses/swamp_boss.png',
-      factoryBoss:'img/sliced/bosses/mech_tank_boss.png',
-      lenin:'img/sliced/bosses/lenin_boss.png',
+      mushroomBoss:'img/sprites/bosses/mushroomBoss.png',
+      treeBoss:'img/sprites/bosses/treeBoss.png',
+      sandBoss:'img/sprites/bosses/sandBoss.png',
+      swampBoss:'img/sprites/bosses/swampBoss.png',
+      factoryBoss:'img/sprites/bosses/factoryBoss.png',
+      lenin:'img/sprites/bosses/lenin.png',
 
-      shop:'img/shop.svg',
       menuPoster:'img/menu_poster_v1018.png',
       forestBg:'img/backgrounds/forest.jpg',
       winterBg:'img/backgrounds/winter.jpg',
@@ -53,22 +55,30 @@ KP.Assets = class Assets {
       cityBg:'img/backgrounds/city.jpg',
       mausoleumBg:'img/backgrounds/mausoleum.jpg',
 
-      pistolWeapon:'img/sliced/weapons/pistol.png',
-      shotgunWeapon:'img/sliced/weapons/shotgun.png',
-      mosinWeapon:'img/sliced/weapons/mosin_rifle.png',
-      smgWeapon:'img/sliced/weapons/smg.png',
-      flamethrowerWeapon:'img/sliced/weapons/flamethrower.png',
-      gasWeapon:'img/sliced/weapons/flamethrower.png',
-      sabreWeapon:'img/sliced/weapons/saber.png',
+      pistolWeapon:'img/sprites/weapons/tt_pistol.png',
+      shotgunWeapon:'img/sprites/weapons/shotgun.png',
+      mosinWeapon:'img/sprites/weapons/mosin.png',
+      smgWeapon:'img/sprites/weapons/smg.png',
+      gasWeapon:'img/sprites/weapons/gasSprayer.png',
+      sabreWeapon:'img/sprites/weapons/sabre.png',
 
-      moneyIcon:'img/sliced/ui_tiles/money_stack.png',
+      // Объекты и предметы
+      shopImg:'img/sprites/objects/shop.png',
+      chestImg:'img/sprites/objects/chest.png',
+      portalExit:'img/sprites/objects/portal.png',
+      moneyPickup:'img/sprites/objects/money.png',
+      timePickupImg:'img/sprites/objects/timePickup.png',
+      medkitImg:'img/sprites/objects/medkit.png',
+      gasMaskImg:'img/sprites/objects/gasMask.png',
+      ammoBoxImg:'img/sprites/objects/ammoBox.png',
+
+      moneyIcon:'img/sprites/objects/money.png',
       forestTile:'img/sliced/ui_tiles/forest_platform.png',
       snowTile:'img/sliced/ui_tiles/snow_platform.png',
       desertTile:'img/sliced/ui_tiles/desert_platform.png',
       swampTile:'img/sliced/ui_tiles/swamp_platform.png',
       factoryPlatform:'img/sliced/ui_tiles/factory_platform.png',
-      moldPlatform:'img/sliced/ui_tiles/mold_platform.png',
-      portalExit:'img/sliced/ui_tiles/portal_exit.png'
+      moldPlatform:'img/sliced/ui_tiles/mold_platform.png'
     });
   }
 
@@ -572,14 +582,16 @@ KP.Assets = class Assets {
     ctx.beginPath();
     ctx.ellipse(e.x+e.w/2,e.y+e.h+2,shadowW,5.5,0,0,Math.PI*2);
     ctx.fill();
-    const imageBackedKinds=['zombie','runner','pistol','gunner','horse','miniboss','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'];
+    const imageBackedKinds=['zombie','runner','pistol','gunner','rifleman','gasman','sniper','sabreur','horse','kamikaze','shielder','maxim','miniboss','mushroomBoss','treeBoss','sandBoss','swampBoss','factoryBoss','lenin'];
     if(imageBackedKinds.includes(e.kind)){
       const sizeMap={
-        zombie:[44,58], runner:[44,58], pistol:[44,58], gunner:[55,60], horse:[78,52], miniboss:[62,64],
+        zombie:[44,58], runner:[44,58], pistol:[44,58], gunner:[55,60], rifleman:[44,58], gasman:[44,58],
+        sniper:[44,58], sabreur:[46,58], horse:[78,52], kamikaze:[42,52], shielder:[50,56], maxim:[72,46], miniboss:[62,64],
         mushroomBoss:[110,92], treeBoss:[110,92], sandBoss:[110,92], swampBoss:[110,92], factoryBoss:[110,92], lenin:[88,92]
       };
       const offsMap={
-        zombie:[-3,2], runner:[-3,2], pistol:[-3,2], gunner:[-3,2], horse:[-6,4], miniboss:[-4,0],
+        zombie:[-3,2], runner:[-3,2], pistol:[-3,2], gunner:[-3,2], rifleman:[-3,2], gasman:[-3,2],
+        sniper:[-3,2], sabreur:[-3,2], horse:[-6,4], kamikaze:[-3,2], shielder:[-4,2], maxim:[-2,4], miniboss:[-4,0],
         mushroomBoss:[-10,-8], treeBoss:[-10,-8], sandBoss:[-10,-8], swampBoss:[-10,-8], factoryBoss:[-10,-8], lenin:[-2,-4]
       };
       const [dw,dh]=sizeMap[e.kind]||[e.w,e.h];

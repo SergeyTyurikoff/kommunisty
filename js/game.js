@@ -742,7 +742,7 @@ KP.Game = class Game {
     this.world.draw(ctx,this.cameraX,this.cameraY,this.canvas.width,this.canvas.height,this.assets);
     this.drawRushClocks(ctx);
     for(const cloud of this.clouds) if(this.visible(cloud,220,180)) cloud.draw(ctx);
-    for(const p of this.pickups) if(this.visible(p)) p.draw(ctx);
+    for(const p of this.pickups) if(this.visible(p)) p.draw(ctx,this.assets);
     for(const b of this.playerBullets) b.draw(ctx);
     for(const b of this.enemyBullets) b.draw(ctx);
     for(const e of this.enemies) if(this.visible(e)) e.draw(ctx,this.assets);

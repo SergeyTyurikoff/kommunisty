@@ -215,6 +215,11 @@ KP.World = class World {
 
     // Chests
     for(const c of this.chests) if(this.visible(c,cameraX,cameraY,W,H)){
+      if(assets&&assets.ready('chestImg')){
+        assets.drawImg(ctx,'chestImg',c.x-4,c.y-10,c.w+8,c.h+12,false);
+        if(c.open){ ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fillRect(c.x-4,c.y-10,c.w+8,c.h+12); }
+        continue;
+      }
       ctx.fillStyle=c.open?'#3a2010':'#6b3e10';
       ctx.fillRect(c.x,c.y,c.w,c.h);
       ctx.strokeStyle=c.open?'#5a3018':'#c89042';
@@ -227,14 +232,10 @@ KP.World = class World {
       }
     }
 
-    // Shops — always canvas (SVG asset is decorative only)
+    // Shops — спрайт, иначе процедурная отрисовка
     for(const s of this.shops) if(this.visible(s,cameraX,cameraY,W,H)){
-      if(assets) assets.drawShop(ctx,s.x,s.y,s.w,s.h);
-      else {
-        ctx.fillStyle='#2b1d12'; ctx.fillRect(s.x,s.y,s.w,s.h);
-        ctx.fillStyle='#ffd21c'; ctx.fillRect(s.x-10,s.y-22,s.w+20,22);
-        ctx.fillStyle='#111'; ctx.font='bold 12px Arial'; ctx.fillText('СНАБЖЕНЕЦ',s.x+4,s.y-7);
-      }
+      if(assets&&assets.ready('shopImg')) assets.drawImg(ctx,'shopImg',s.x-12,s.y-30,s.w+24,s.h+30,false);
+      else if(assets) assets.drawShop(ctx,s.x,s.y,s.w,s.h);
     }
 
     // Portal

@@ -260,8 +260,14 @@ KP.Pickup = class Pickup extends KP.Entity {
     this.vy+=game?game.gravity*.35:.2;
     if(game) game.world.collide(this);
   }
-  draw(ctx){
+  draw(ctx,assets){
     const yy=this.y+Math.sin(this.bob)*3;
+    if(assets){
+      const key=this.type==='money'?'moneyPickup':this.type==='time'?'timePickupImg':
+        (this.type==='heal'||this.type==='medkit')?'medkitImg':this.type==='gasMask'?'gasMaskImg':
+        this.type==='ammo'?'ammoBoxImg':null;
+      if(key&&assets.ready(key)){ assets.drawImg(ctx,key,this.x,yy,22,22,false); return; }
+    }
     ctx.save();
     if(this.type==='money'){
       // Gold coin with sheen
