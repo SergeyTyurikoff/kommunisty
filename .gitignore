@@ -16,8 +16,11 @@ tmp/
 temp/
 *.tmp
 
-# Local tools and downloaded runtimes
-tools/
+# Downloaded runtimes (portable Node жил в tools/), но сами тул-скрипты трекаем
+tools/node-*/
+tools/*-win-x64/
+# Локальный бэкап оригиналов спрайтов (тяжёлый, не нужен в репо)
+tools/hero_move_backup/
 
 # Playtest and test artifacts
 playtest-report/
@@ -38,7 +41,9 @@ screenshots/
 # Editor / IDE
 .vscode/
 .idea/
-.claude/
+# .claude локальный, но агентов проекта храним в репо
+.claude/*
+!.claude/agents/
 *_original_backup.js
 
 # Unity generated folders
