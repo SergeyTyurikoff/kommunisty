@@ -11,7 +11,6 @@ KP.Assets = class Assets {
       pistol:{ mode:'split', split:.6, pad:12, bob:1.7, stepLift:3.2, stride:4.3, lean:.06, breath:.8, wholeBob:.8, recoil:3.4, squash:.03 },
       gunner:{ mode:'split', split:.61, pad:12, bob:1.9, stepLift:3.1, stride:4.6, lean:.05, breath:.8, wholeBob:.8, recoil:3.8, squash:.03 },
       rifleman:{ mode:'split', split:.61, pad:12, bob:1.9, stepLift:3.3, stride:4.9, lean:.06, breath:.8, wholeBob:.8, recoil:3.6, squash:.03 },
-      flamer:{ mode:'split', split:.61, pad:12, bob:1.8, stepLift:3.1, stride:4.4, lean:.05, breath:.8, wholeBob:.8, recoil:4.1, squash:.03 },
       gasman:{ mode:'split', split:.61, pad:12, bob:1.8, stepLift:3.1, stride:4.4, lean:.05, breath:.8, wholeBob:.8, recoil:3.4, squash:.03 },
       sabreur:{ mode:'split', split:.59, pad:12, bob:2.2, stepLift:4.2, stride:6.4, lean:.1, breath:.9, wholeBob:1.0, recoil:2.0, squash:.04 },
       maxim:{ mode:'whole', pad:12, bob:0, stepLift:0, stride:0, lean:0, breath:.3, wholeBob:.25, recoil:3.6, squash:.01 },
@@ -618,7 +617,6 @@ KP.Assets = class Assets {
     else if(e.kind==='shielder'){ this.drawShielder(ctx,e); usedArt=true; }
     else if(e.kind==='sniper'){ this.drawSniper(ctx,e); usedArt=true; }
     else if(e.kind==='rifleman'){ this.drawRifleman(ctx,e); usedArt=true; }
-    else if(e.kind==='flamer'){ this.drawFlamer(ctx,e); usedArt=true; }
     else if(e.kind==='gasman'){ this.drawGasman(ctx,e); usedArt=true; }
     else if(e.kind==='sabreur'){ this.drawSabreur(ctx,e); usedArt=true; }
     else if(e.kind==='maxim'){ this.drawMaxim(ctx,e); usedArt=true; }
@@ -678,21 +676,6 @@ KP.Assets = class Assets {
     ctx.fillStyle='#2a2016'; ctx.fillRect(x+18,y+25,44,5);
     ctx.fillStyle='#5f4120'; ctx.fillRect(x+40,y+22,12,10);
     ctx.fillStyle='#222'; ctx.fillRect(x+10,y+48,9,8); ctx.fillRect(x+24,y+48,9,8);
-    ctx.restore();
-  }
-
-  drawFlamer(ctx,e){
-    const x=e.x, y=e.y;
-    ctx.save();
-    if(e.facing<0){ ctx.translate(x+e.w,y); ctx.scale(-1,1); ctx.translate(-x,-y); }
-    ctx.fillStyle=e.hurt?'#fff5c9':'#5a4031'; ctx.fillRect(x+7,y+18,28,30);
-    ctx.fillStyle='#703116'; ctx.fillRect(x+6,y+24,30,9);
-    ctx.fillStyle='#d4b08c'; ctx.fillRect(x+10,y+3,18,16);
-    ctx.fillStyle='#4a2418'; ctx.fillRect(x+9,y,22,8);
-    ctx.fillStyle='#222'; ctx.fillRect(x+2,y+20,6,22); ctx.fillRect(x+30,y+20,6,22);
-    ctx.fillStyle='#ff7a22'; ctx.fillRect(x+19,y+25,38,6);
-    ctx.fillStyle='#111'; ctx.fillRect(x+46,y+23,11,10);
-    ctx.fillStyle='rgba(255,122,34,.35)'; ctx.fillRect(x,y+18,36,32);
     ctx.restore();
   }
 

@@ -778,16 +778,6 @@ KP.Enemy = class Enemy extends KP.Entity {
       game.burst(tx,ty,'#98d94a',8);
       return;
     }
-    if(this.kind==='flamer'){
-      for(const spread of[-0.08,0,0.08]){
-        const vx=(dx/len*this.bulletSpeed)*Math.cos(spread)-(dy/len*this.bulletSpeed)*Math.sin(spread);
-        const vy=(dx/len*this.bulletSpeed)*Math.sin(spread)+(dy/len*this.bulletSpeed)*Math.cos(spread);
-        game.enemyBullets.push(new KP.Bullet('enemy',c.x,c.y,vx,vy,{
-          dmg:Math.round(this.hitTime*.9),range:280,color:'#ff6a24',knock:1,size:14,flame:true
-        }));
-      }
-      return;
-    }
     const bColor=
       this.kind==='sniper'?'#ffee44':
       this.kind==='rifleman'?'#ffcf7a':

@@ -337,7 +337,7 @@ KP.Game = class Game {
       ['runner','zombie','pistol'],
       ['runner','pistol','gasman'],
       ['horse','runner','rifleman','sabreur'],
-      ['horse','gunner','flamer','kamikaze'],
+      ['horse','gunner','gasman','kamikaze'],
       ['rifleman','gasman','maxim','shielder'],
       ['miniboss','horse','maxim','shielder','kamikaze','sabreur']
     ];
@@ -391,7 +391,7 @@ KP.Game = class Game {
       this.player.nextWeapon(this);
       return;
     }
-    const slots=[['one','pistol'],['two','mosin'],['three','smg'],['four','flamethrower'],['five','sabre'],['six','shotgun']];
+    const slots=[['one','pistol'],['two','mosin'],['three','smg'],['four','gasSprayer'],['five','sabre'],['six','shotgun']];
     for(const [act,id] of slots) if(this.input.wasPressed(act)&&this.player.inventory.includes(id)){
       this.player.weapon=id;
       this.toast('Оружие: '+KP.Balance.weapons[id].name);
@@ -621,7 +621,7 @@ KP.Game = class Game {
 
   getShopAmmoOptions(){
     const seen=new Set();
-    const order=['pistol','rifle','machinegun','shells','fuel','gas'];
+    const order=['pistol','rifle','machinegun','shells','gas'];
     const current=KP.Balance.weapons[this.player.weapon]&&KP.Balance.weapons[this.player.weapon].ammoType;
     if(current) seen.add(current);
     for(const id of this.player.inventory){
@@ -667,10 +667,9 @@ KP.Game = class Game {
       this.toast('Выбери тип патронов цифрой 1-6.');
     }
     if(this.input.wasPressed('two')) buy('smg',KP.Balance.weapons.smg.price);
-    if(this.input.wasPressed('three')) buy('flamethrower',KP.Balance.weapons.flamethrower.price);
-    if(this.input.wasPressed('four')) buy('gasSprayer',KP.Balance.weapons.gasSprayer.price);
-    if(this.input.wasPressed('five')) buy('sabre',KP.Balance.weapons.sabre.price);
-    if(this.input.wasPressed('six')) buy('shotgun',KP.Balance.weapons.shotgun.price);
+    if(this.input.wasPressed('three')) buy('gasSprayer',KP.Balance.weapons.gasSprayer.price);
+    if(this.input.wasPressed('four')) buy('sabre',KP.Balance.weapons.sabre.price);
+    if(this.input.wasPressed('five')) buy('shotgun',KP.Balance.weapons.shotgun.price);
   }
 
   burst(x,y,color,count){

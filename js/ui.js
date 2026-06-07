@@ -241,10 +241,9 @@ KP.UI = class UI {
     const items=[
       ['1','ammo','Боеприпасы: выбрать тип','под оружие из инвентаря'],
       ['2','smg','Пулемёт',KP.Balance.weapons.smg.desc],
-      ['3','flamethrower','Огнемёт',KP.Balance.weapons.flamethrower.desc],
-      ['4','gasSprayer','Газомет',KP.Balance.weapons.gasSprayer.desc],
-      ['5','sabre','Шашка',KP.Balance.weapons.sabre.desc],
-      ['6','shotgun','Обрез',KP.Balance.weapons.shotgun.desc]
+      ['3','gasSprayer','Газомет',KP.Balance.weapons.gasSprayer.desc],
+      ['4','sabre','Шашка',KP.Balance.weapons.sabre.desc],
+      ['5','shotgun','Обрез',KP.Balance.weapons.shotgun.desc]
     ];
     let yy=192;
     for(const [slot,id,title,desc] of items){

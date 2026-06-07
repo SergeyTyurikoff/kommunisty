@@ -39,7 +39,6 @@ KP.Balance = {
     rifle:       {name:'винтовочные', short:'Внт', start:20, max:70, buyAmount:12, price:14},
     machinegun:  {name:'пулемётные', short:'Плм', start:0, max:180, buyAmount:45, price:14},
     shells:      {name:'картечь', short:'Дрб', start:0, max:34, buyAmount:8, price:18},
-    fuel:        {name:'топливо', short:'Огн', start:0, max:160, buyAmount:40, price:16},
     gas:         {name:'газовые баллоны', short:'Газ', start:0, max:120, buyAmount:26, price:18}
   },
   items:{
@@ -50,7 +49,6 @@ KP.Balance = {
     pistol:      { name:'Пистолет', type:'gun', ammoType:'pistol', ammoUse:1, dmg:18, delay:270, speed:8.0, range:315, price:0, knock:2.7, color:'#f5f5f5', sprite:'pistolWeapon', desc:'короткая дистанция, быстрый темп' },
     mosin:       { name:'Винтовка Мосина', type:'gun', ammoType:'rifle', ammoUse:1, dmg:66, delay:760, speed:13.2, range:820, price:0, knock:6.2, color:'#ffd21c', sprite:'mosinWeapon', desc:'редко, больно, по-старому' },
     smg:         { name:'Пулемёт', type:'gun', ammoType:'machinegun', ammoUse:1, dmg:13, delay:85, speed:12.5, range:610, price:26, knock:1.7, color:'#ff9a26', sprite:'smgWeapon', desc:'быстро жрёт пулемётные патроны' },
-    flamethrower:{ name:'Огнемёт', type:'flame', ammoType:'fuel', ammoUse:1, dmg:4.8, delay:45, speed:5.0, range:210, price:34, knock:.9, burn:105, burnDps:.055, color:'#ff5b1a', sprite:'flamethrowerWeapon', desc:'топливо, огонь и дебафф по толпе' },
     gasSprayer:  { name:'Газомет', type:'gas', ammoType:'gas', ammoUse:1, dmg:2.8, delay:68, speed:3.8, range:240, price:38, knock:.2, cloudLife:190, cloudRadius:64, cloudTick:8.5, color:'#98d94a', sprite:'gasWeapon', desc:'облако газа, давит зоной' },
     sabre:       { name:'Шашка', type:'melee', ammoType:null, ammoUse:0, dmg:40, delay:390, speed:0, range:70, price:24, knock:8, color:'#d8f2ff', sprite:'sabreWeapon', desc:'ближний бой, рискованно, без патронов' },
     shotgun:     { name:'Обрез', type:'shotgun', ammoType:'shells', ammoUse:1, dmg:18, pellets:5, delay:640, speed:9.8, range:340, price:48, knock:5.0, color:'#ffcf7a', sprite:'shotgunWeapon', desc:'картечь, конусный выстрел' }
@@ -61,7 +59,6 @@ KP.Balance = {
     pistol:      { hp:90,  speed:.075, dmg:14, hitTime:8,  xp:23,  money:[7,14],    detect:560, attackRange:365, shoot:true,  fireDelay:105, keepDistance:240, bulletSpeed:4.6, jump:true,  weight:1.1,  role:'ranged',  patrol:'floor' },
     gunner:      { hp:118, speed:.068, dmg:8,  hitTime:5,  xp:34,  money:[9,18],    detect:620, attackRange:455, shoot:true,  fireDelay:44,  keepDistance:310, bulletSpeed:5.4, jump:false, weight:1.25, role:'ranged',  patrol:'floor' },
     rifleman:    { hp:98,  speed:.092, dmg:10, hitTime:7,  xp:28,  money:[8,16],    detect:620, attackRange:470, shoot:true,  fireDelay:36,  keepDistance:280, bulletSpeed:6.2, jump:true,  weight:1.05, role:'ranged',  patrol:'floor' },
-    flamer:      { hp:132, speed:.082, dmg:6,  hitTime:4,  xp:36,  money:[10,19],   detect:500, attackRange:235, shoot:true,  fireDelay:40,  keepDistance:150, bulletSpeed:4.3, jump:false, weight:1.45, role:'ranged',  patrol:'floor' },
     gasman:      { hp:108, speed:.072, dmg:7,  hitTime:6,  xp:34,  money:[10,19],   detect:560, attackRange:310, shoot:true,  fireDelay:74,  keepDistance:190, bulletSpeed:4.1, jump:false, weight:1.2,  role:'ranged',  patrol:'floor' },
     sabreur:     { hp:104, speed:.19,  dmg:18, hitTime:11, xp:30,  money:[8,16],    detect:520, attackRange:56,  shoot:false, fireDelay:0,   keepDistance:0,   bulletSpeed:0,   jump:true,  weight:1.05, role:'melee',   patrol:'floor' },
     horse:       { hp:160, speed:.27,  dmg:20, hitTime:13, xp:48,  money:[16,32],   detect:600, attackRange:44,  shoot:false, fireDelay:0,   keepDistance:0,   bulletSpeed:0,   jump:true,  weight:1.8,  role:'charger', patrol:'floor' },

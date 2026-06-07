@@ -49,7 +49,7 @@ KP.World = class World {
       this.chests.push({x:1710,y:444,w:38,h:26,open:false,loot:'money'});
     } else {
       this.chests.push({x:760,  y:444,w:38,h:26,open:false,loot:i%3===0?'heal':(i%2===0?'money':'ammo')});
-      this.chests.push({x:1320, y:444,w:38,h:26,open:false,loot:['sabre','smg','gasSprayer','shotgun','ammo','flamethrower'][i]||'money'});
+      this.chests.push({x:1320, y:444,w:38,h:26,open:false,loot:['sabre','smg','gasSprayer','shotgun','ammo','gasSprayer'][i]||'money'});
       this.chests.push({x:1980, y:444,w:38,h:26,open:false,loot:['money','heal','sabre','gasSprayer','shotgun','heal'][i]||'money'});
     }
 
@@ -93,8 +93,8 @@ KP.World = class World {
       ['zombie','runner','pistol'],
       ['zombie','runner','pistol','gasman'],
       ['runner','rifleman','sabreur','gasman','horse'],
-      ['runner','gunner','flamer','sabreur','kamikaze'],
-      ['rifleman','flamer','gasman','maxim','shielder','miniboss'],
+      ['runner','gunner','gasman','sabreur','kamikaze'],
+      ['rifleman','gunner','gasman','maxim','shielder','miniboss'],
       ['gunner','rifleman','maxim','horse','shielder','sniper','kamikaze','sabreur']
     ][this.levelIndex]||['zombie'];
 
