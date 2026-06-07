@@ -10,7 +10,11 @@ KP.AudioSystem = class AudioSystem {
     this.masterVolume = 1;
     if(!this.supported) return;
 
-    this.music = this.makeAudio('audio/music_loop.wav', {loop:true, volume:.24});
+    // Треш-метал саундтрек (Suno). Два трека крутятся плейлистом по кругу.
+    this.musicTracks = ['audio/music_mold_red_riot.mp3', 'audio/music_mold_red_riot_2.mp3'];
+    this.musicIndex = Math.floor(Math.random() * this.musicTracks.length);
+    this.music = this.makeAudio(this.musicTracks[this.musicIndex], {loop:false, volume:.32});
+    if(this.music.addEventListener) this.music.addEventListener('ended', () => this._nextTrack());
     this.soundPools = {
       menuStart:this.makePool('audio/menu_start.wav', 2, .75),
       pistol:this.makePool('audio/shot_pistol.wav', 4, .62),
@@ -76,9 +80,23 @@ KP.AudioSystem = class AudioSystem {
     window.addEventListener('touchstart', unlock);
   }
 
+  _nextTrack(){
+    if(!this.music || !this.musicTracks || !this.musicTracks.length) return;
+    this.musicIndex = (this.musicIndex + 1) % this.musicTracks.length;
+    this.music.src = this.musicTracks[this.musicIndex];
+    this.music.currentTime = 0;
+    const attempt = this.music.play();
+    Promise.resolve(attempt).catch(()=>{});
+  }
+
   playMusic(reset=false){
     if(!this.supported || !this.unlocked || !this.music) return;
-    if(reset) this.music.currentTime=0;
+    if(reset){
+      // Со свежего старта берём случайный трек из плейлиста.
+      this.musicIndex = Math.floor(Math.random() * this.musicTracks.length);
+      this.music.src = this.musicTracks[this.musicIndex];
+      this.music.currentTime = 0;
+    }
     if(this.musicStarted) return;
     this.musicStarted=true;
     const attempt=this.music.play();

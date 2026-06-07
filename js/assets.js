@@ -122,6 +122,10 @@ KP.Assets = class Assets {
   }
 
   _buildHeroFrames(img,w,h,state){
+    // Тумблер: использовать ли отдельные PNG-спрайты движения (img/sliced/units/hero_move/).
+    // false — все состояния (в т.ч. run/jump/fall) рисуются процедурной анимацией
+    // базового спрайта hero_revolutionary.png. Поставить true, чтобы вернуть спрайты движения.
+    const useMoveSprites=false;
     const heroMoveFrames={
       run:[
         {id:'heroRunContact', offsetX:-1, offsetY:0},
@@ -138,7 +142,7 @@ KP.Assets = class Assets {
         {id:'heroFall', offsetX:0, offsetY:1}
       ]
     };
-    const heroMoveState=heroMoveFrames[state];
+    const heroMoveState=useMoveSprites?heroMoveFrames[state]:null;
     if(heroMoveState){
       const moveImages=heroMoveState.map((pose)=>this.images[pose.id]);
       if(moveImages.some((moveImg)=>!moveImg||!moveImg.complete||!moveImg.naturalWidth)) return null;
@@ -498,9 +502,18 @@ KP.Assets = class Assets {
     ctx.beginPath();
     ctx.ellipse(x+17,y+58,17,5,0,0,Math.PI*2);
     ctx.fill();
+    // Squash-and-stretch при приземлении
+    const land=player.landTimer>0?player.landTimer/9:0;
+    const squashActive=land>0;
+    if(squashActive){
+      ctx.save();
+      const fx=x+player.w/2, fy=y+player.h;
+      ctx.translate(fx,fy); ctx.scale(1+0.20*land,1-0.20*land); ctx.translate(-fx,-fy);
+    }
     const animState=this._playerAnimState(player);
     if(this._drawAnimatedSprite(ctx,'hero',x-2,y+3,heroW,heroH,facing,animState)){
       this.drawWeapon(ctx,{x,y,w:player.w,h:player.h,facing,attackFlash:player.attackFlash,pose:player.pose,grounded:player.grounded,vx:player.vx,vy:player.vy},weapon);
+      if(squashActive) ctx.restore();
       return;
     }
     const phase=performance.now()/88+player.x*.03;
@@ -528,6 +541,7 @@ KP.Assets = class Assets {
     });
     this.drawWeapon(ctx,{x,y,w:player.w,h:player.h,facing,attackFlash:player.attackFlash,pose:player.pose,grounded:player.grounded,vx:player.vx,vy:player.vy},weapon);
     ctx.restore();
+    if(squashActive) ctx.restore();
   }
 
   drawWeapon(ctx,actor,weapon){
