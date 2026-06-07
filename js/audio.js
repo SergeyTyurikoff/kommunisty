@@ -5,6 +5,8 @@ KP.AudioSystem = class AudioSystem {
     this.supported = typeof Audio === 'function';
     this.unlocked = !this.supported;
     this.musicStarted = false;
+    this._wantMusic = false;
+    this._armed = false;
     this.music = null;
     this.soundPools = {};
     this.masterVolume = 1;
@@ -55,25 +57,12 @@ KP.AudioSystem = class AudioSystem {
   bindUnlock(){
     if(typeof window === 'undefined' || !window.addEventListener) return;
     const unlock=()=>{
-      if(this.unlocked) return;
       this.unlocked=true;
-      if(this.music){
-        const prevMuted=this.music.muted;
-        this.music.muted=true;
-        const attempt=this.music.play();
-        Promise.resolve(attempt).then(()=>{
-          this.music.pause();
-          this.music.currentTime=0;
-          this.music.muted=prevMuted;
-        }).catch(()=>{
-          this.music.muted=prevMuted;
-        });
-      }
-      if(window.removeEventListener){
-        window.removeEventListener('keydown', unlock);
-        window.removeEventListener('pointerdown', unlock);
-        window.removeEventListener('touchstart', unlock);
-      }
+      // Если музыку уже просили — запускаем прямо в жесте (надёжнее всего).
+      if(this._wantMusic) this._tryPlayMusic();
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchstart', unlock);
     };
     window.addEventListener('keydown', unlock);
     window.addEventListener('pointerdown', unlock);
@@ -81,7 +70,7 @@ KP.AudioSystem = class AudioSystem {
   }
 
   _nextTrack(){
-    if(!this.music || !this.musicTracks || !this.musicTracks.length) return;
+    if(!this.music || !this.musicTracks || !this.musicTracks.length || !this._wantMusic) return;
     this.musicIndex = (this.musicIndex + 1) % this.musicTracks.length;
     this.music.src = this.musicTracks[this.musicIndex];
     this.music.currentTime = 0;
@@ -89,18 +78,41 @@ KP.AudioSystem = class AudioSystem {
     Promise.resolve(attempt).catch(()=>{});
   }
 
+  _tryPlayMusic(){
+    if(!this._wantMusic || this.musicStarted || !this.music) return;
+    const attempt=this.music.play();
+    Promise.resolve(attempt)
+      .then(()=>{ this.musicStarted=true; })
+      .catch(()=>{ this.musicStarted=false; this._armGesture(); });
+  }
+
+  // Если автоплей заблокирован — стартуем музыку на следующем действии игрока.
+  _armGesture(){
+    if(this._armed || typeof window==='undefined' || !window.addEventListener) return;
+    this._armed=true;
+    const kick=()=>{
+      this._armed=false; this.unlocked=true;
+      window.removeEventListener('keydown', kick);
+      window.removeEventListener('pointerdown', kick);
+      window.removeEventListener('touchstart', kick);
+      this._tryPlayMusic();
+    };
+    window.addEventListener('keydown', kick);
+    window.addEventListener('pointerdown', kick);
+    window.addEventListener('touchstart', kick);
+  }
+
   playMusic(reset=false){
-    if(!this.supported || !this.unlocked || !this.music) return;
+    if(!this.supported || !this.music) return;
     if(reset){
       // Со свежего старта берём случайный трек из плейлиста.
       this.musicIndex = Math.floor(Math.random() * this.musicTracks.length);
       this.music.src = this.musicTracks[this.musicIndex];
       this.music.currentTime = 0;
+      this.musicStarted=false;
     }
-    if(this.musicStarted) return;
-    this.musicStarted=true;
-    const attempt=this.music.play();
-    Promise.resolve(attempt).catch(()=>{ this.musicStarted=false; });
+    this._wantMusic=true;
+    this._tryPlayMusic();
   }
 
   stopMusic(reset=false){
@@ -108,6 +120,7 @@ KP.AudioSystem = class AudioSystem {
     this.music.pause();
     if(reset) this.music.currentTime=0;
     this.musicStarted=false;
+    this._wantMusic=false;
   }
 
   play(id, rate=1, volumeMul=1){
