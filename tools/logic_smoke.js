@@ -79,6 +79,16 @@ try {
   if(g.levelIndex!==cpBiome) throw new Error('restart не вернул на чекпойнт-биом');
   if(g.player.dead) throw new Error('после рестарта игрок мёртв'); T.tick(10); g.draw();
 
+  mark('portal transitions (loadNextLevel)');
+  if(g.fullReset) g.fullReset(); T.startGame();
+  for(let b=0;b<6;b++){
+    for(const e of g.enemies) if(global.KP.Balance.enemies[e.kind] && global.KP.Balance.enemies[e.kind].role==='boss'){ e.takeDamage(999999,0,e.x,{},g); g.onEnemyHit(e,true,999999); }
+    g.player.x=g.world.portal.x; g.player.y=g.world.portal.y; g.checkPortal();
+    for(let i=0;i<60;i++){ g.update(); g.draw(); }
+    if(g.ui.ending) break;
+  }
+  if(!g.ui.ending) throw new Error('переходы по биомам не дошли до финала');
+
   mark('progress biomes + draw'); for(let b=0;b<6;b++){ T.goToBiome(b); for(let i=0;i<8;i++){ g.update(); g.draw(); } }
 
   console.log('LOGIC SMOKE OK');

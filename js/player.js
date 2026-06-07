@@ -380,7 +380,7 @@ KP.Player = class Player extends KP.Entity {
   unlockAbility(id,game){
     if(!id||this.abilities[id]===undefined||this.abilities[id]) return;
     this.abilities[id]=true;
-    const meta=(KP.Balance.abilityUnlocks||[]).find(a=>a.id===id);
+    const meta=(KP.Balance.abilityUnlocks||[]).find(a=>a&&a.id===id);
     if(game) game.toast('Открыта способность: '+(meta?meta.name:id)+'. '+(meta?meta.desc:''));
   }
 
