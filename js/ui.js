@@ -149,6 +149,19 @@ KP.UI = class UI {
       ctx.font='bold 18px Arial';
       ctx.fillText(`ВРЕМЯ СТОИТ: ${Math.ceil(game.timeStopFrames/60)}с`,18,84);
     }
+
+    if(game.waveObjective&&!game.waveObjective.done){
+      const o=game.waveObjective;
+      let label, ratio;
+      if(o.type==='kill'){ label=`Перебить волну: ${Math.min(o.progress,o.target)}/${o.target}`; ratio=o.progress/o.target; }
+      else { label=`Продержись: ${Math.ceil(o.timeLeft/60)}с`; ratio=1-o.timeLeft/o.maxTime; }
+      const wx=362, wy=92, ww=300, wh=30;
+      ctx.fillStyle='rgba(8,8,8,.82)'; ctx.fillRect(wx,wy,ww,wh);
+      ctx.strokeStyle='rgba(255,120,40,.6)'; ctx.lineWidth=1.5; ctx.strokeRect(wx,wy,ww,wh);
+      ctx.fillStyle='rgba(255,140,40,.32)'; ctx.fillRect(wx,wy+wh-6,ww*U.clamp(ratio,0,1),6);
+      ctx.fillStyle='#ffd29a'; ctx.font='bold 14px Arial'; ctx.textAlign='center';
+      ctx.fillText('⚠ '+label, wx+ww/2, wy+19); ctx.textAlign='left';
+    }
     this.weaponRack(ctx,game);
     this.quickSlots(ctx,game);
   }
@@ -339,10 +352,10 @@ KP.UI = class UI {
       const lines=[
         'A/D или Ф/В — ходьба | Shift — бег',
         'W/↑ — прыжок | S/↓ — спуск через платформу',
-        'ЛКМ/J/О — атака | Q — смена оружия | 1-6 — быстрые слоты',
+        'ЛКМ/J/О — атака | Q — смена оружия | 1-6 — аптечка/противогаз',
         'Z/Я — перекат | E — взаимодействие | I — расширить инвентарь',
-        'F — стоп-время | Esc — пауза | R — рестарт',
-        'Турбо и выкачивание времени временно отключены'
+        'C/С — ТУРБО (жжёт здоровье) | F/А — стоп-время',
+        'Esc — пауза | R — рестарт (с начала биома)'
       ];
       lines.forEach((line,i)=>ctx.fillText(line,74,392+i*26));
       ctx.fillStyle='#9cc8ff'; ctx.font='13px Arial'; ctx.fillText('Esc или повторный выбор — закрыть.',74,528);
@@ -366,18 +379,21 @@ KP.UI = class UI {
     ctx.fillStyle='#cc0000'; ctx.font='bold 46px Arial'; ctx.fillText('ФЕЛИКС ПАЛ',512,148);
     if(game&&game.deathStats){
       const s=game.deathStats;
-      ctx.fillStyle='rgba(30,10,5,.75)'; ctx.fillRect(280,180,464,180);
-      ctx.strokeStyle='#8b0000'; ctx.lineWidth=2; ctx.strokeRect(280,180,464,180);
-      ctx.fillStyle='#ffd21c'; ctx.font='bold 22px Arial'; ctx.fillText('ИТОГ ОПЕРАЦИИ',512,212);
+      ctx.fillStyle='rgba(30,10,5,.75)'; ctx.fillRect(280,176,464,196);
+      ctx.strokeStyle='#8b0000'; ctx.lineWidth=2; ctx.strokeRect(280,176,464,196);
+      ctx.fillStyle='#ffd21c'; ctx.font='bold 22px Arial'; ctx.fillText('ИТОГ ОПЕРАЦИИ',512,206);
       ctx.fillStyle='#ddd'; ctx.font='20px Arial';
-      ctx.fillText(`Биом: ${s.biome} (${s.biomeIndex+1} из 6)`,512,248);
-      ctx.fillText(`Уровень: ${s.level} | Уничтожено: ${s.kills}`,512,280);
+      ctx.fillText(`Биом: ${s.biome} (${s.biomeIndex+1} из 6)`,512,240);
+      ctx.fillText(`Уровень: ${s.level} | Уничтожено: ${s.kills}`,512,270);
+      ctx.fillText(`Деньги: ${s.money}`,512,300);
       ctx.fillStyle=s.maxCombo>=3?'#ff8800':s.maxCombo>=2?'#ffd21c':'#aaa';
       ctx.font='18px Arial';
-      ctx.fillText(`Максимальное комбо: x${s.maxCombo.toFixed(1)}`,512,316);
+      ctx.fillText(`Максимальное комбо: x${s.maxCombo.toFixed(1)}`,512,332);
     }
-    ctx.fillStyle='#888'; ctx.font='18px Arial';
-    ctx.fillText('R — рестарт. Плесень пишет отчёт.',512,394);
+    const hasCp=game&&game.checkpoint;
+    const cpName=hasCp?game.world.biomes[game.checkpoint.levelIndex]:null;
+    ctx.fillStyle='#aaa'; ctx.font='18px Arial';
+    ctx.fillText(hasCp?`R — продолжить с начала биома «${cpName}»`:'R — рестарт. Плесень пишет отчёт.',512,402);
     ctx.textAlign='left';
   }
 
@@ -386,14 +402,16 @@ KP.UI = class UI {
     ctx.textAlign='center';
     const pulse=0.92+Math.sin(Date.now()/400)*0.08;
     ctx.fillStyle=`rgba(255,210,28,${pulse})`; ctx.font='bold 54px Arial'; ctx.fillText('ПАУЗА',512,190);
-    ctx.fillStyle='rgba(20,10,5,.8)'; ctx.fillRect(312,218,400,148);
-    ctx.strokeStyle='rgba(180,140,20,.6)'; ctx.lineWidth=1.5; ctx.strokeRect(312,218,400,148);
+    ctx.fillStyle='rgba(20,10,5,.8)'; ctx.fillRect(312,214,400,178);
+    ctx.strokeStyle='rgba(180,140,20,.6)'; ctx.lineWidth=1.5; ctx.strokeRect(312,214,400,178);
     ctx.fillStyle='#ddd'; ctx.font='20px Arial';
-    ctx.fillText(`${game.world.biomeName()} ${game.levelIndex+1}/6`,512,252);
-    ctx.fillText(`Уровень ${game.player.level} | Убито: ${game.kills}`,512,284);
-    ctx.fillText(`Время: ${Math.round(game.player.time)} / ${game.player.maxTime}`,512,316);
+    ctx.fillText(`${game.world.biomeName()} ${game.levelIndex+1}/6`,512,246);
+    ctx.fillText(`Уровень ${game.player.level} | Убито: ${game.kills}`,512,276);
+    ctx.fillText(`Здоровье: ${Math.round(game.player.time)}/${game.player.maxTime} | Деньги: ${game.player.money}`,512,306);
+    ctx.fillStyle=game.maxCombo>=2?'#ff8800':'#bbb'; ctx.font='17px Arial';
+    ctx.fillText(`Лучшее комбо: x${game.maxCombo.toFixed(1)}`,512,334);
     ctx.fillStyle='#aaa'; ctx.font='16px Arial';
-    ctx.fillText('Esc — продолжить | R — рестарт',512,346);
+    ctx.fillText('Esc — продолжить | R — заново с начала биома',512,362);
     ctx.textAlign='left';
   }
 

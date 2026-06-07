@@ -42,6 +42,38 @@ KP.Particle = class Particle {
   }
 };
 
+// Кусок плоти/слизи — врага «разрывает на части» при смерти
+KP.Gib = class Gib extends KP.Entity {
+  constructor(x,y,color){
+    super(x,y,0,0);
+    Object.assign(this,{
+      x,y,
+      vx:U.rand(-4.5,4.5), vy:U.rand(-7.5,-1.5),
+      color, size:U.rand(3,8),
+      rot:Math.random()*Math.PI*2, vr:U.rand(-.45,.45),
+      life:U.rand(34,64), maxLife:64
+    });
+  }
+  update(game){
+    this.vy+=(game?game.gravity:.7)*.55;
+    this.vx*=.99;
+    this.x+=this.vx; this.y+=this.vy;
+    this.rot+=this.vr;
+    this.life--;
+  }
+  draw(ctx){
+    ctx.save();
+    ctx.globalAlpha=Math.max(0,Math.min(1,this.life/this.maxLife*1.4));
+    ctx.translate(this.x,this.y);
+    ctx.rotate(this.rot);
+    ctx.fillStyle=this.color;
+    ctx.fillRect(-this.size/2,-this.size/2,this.size,this.size);
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.fillRect(-this.size/2,this.size/4,this.size,this.size/4);
+    ctx.restore();
+  }
+};
+
 // Destructible crate
 KP.Crate = class Crate extends KP.Entity {
   constructor(x,y){ super(x,y,36,36); this.hp=1; this.shake=0; }
@@ -292,7 +324,7 @@ KP.Enemy = class Enemy extends KP.Entity {
       speed:b.speed,detect:b.detect,attackRange:b.attackRange,shoot:b.shoot,fireDelay:b.fireDelay||0,
       keepDistance:b.keepDistance||0,bulletSpeed:b.bulletSpeed||0,canJump:b.jump,weight:b.weight,
       facing:-1,state:'patrol',shootCd:60,jumpCd:80,hurt:0,alertText:'',alertTimer:0,meleeCd:0,
-      burn:0,burnDps:0,ramCd:b.ramCd||0,ramTimer:0,ramSpeed:b.ramSpeed||0,ramDuration:b.ramDuration||0,
+      burn:0,burnDps:0,ramCd:b.ramCd||0,ramTimer:0,ramSpeed:b.ramSpeed||0,ramDuration:b.ramDuration||0,ramWindup:0,ramDir:0,
       turboCd:120+Math.random()*160,turboTimer:0,timeDrained:false,
       patrolMin:0,patrolMax:99999,basePatrolMin:0,basePatrolMax:99999,laneType:'ground',floorY:0,memoryTimer:0,lastSeenX:x,lastSeenY:y,
       laneBias:U.rand(-28,28),strafeBias:Math.random()<.5?-1:1,
@@ -473,17 +505,6 @@ KP.Enemy = class Enemy extends KP.Entity {
     }
   }
 
-  drainTime(game){
-    this.timeDrained=true;
-    this.hp-=KP.Balance.player.drainEnemyDamagePerFrame;
-    this.vx*=.72;
-    this.memoryTimer=Math.max(this.memoryTimer,90);
-    if(this.hp<=0){
-      this.alive=false;
-      this.deathTimer=Math.max(this.deathTimer,24);
-    }
-  }
-
   update(game){
     const p=game.player;
     this.timeDrained=false;
@@ -650,17 +671,29 @@ KP.Enemy = class Enemy extends KP.Entity {
   }
 
   updateLeninRam(game,abs,dir){
+    if(this.ramWindup>0){
+      // Телеграф: Ленин упирается и заносит плечо — у игрока есть время отойти.
+      this.ramWindup--; this.vx*=0.55;
+      if(this.ramWindup<=0){
+        this.ramTimer=this.ramDuration;
+        this.facing=this.ramDir||dir;
+        game.toast('Таран пошёл!');
+        game.shake(8,4);
+      }
+      return;
+    }
     if(this.ramTimer>0){
-      this.ramTimer--; this.vx=dir*this.ramSpeed;
-      if(U.rects(this,game.player)) game.player.hurt(this.hitTime+10,dir,game);
+      const rd=this.ramDir||dir;
+      this.ramTimer--; this.vx=rd*this.ramSpeed;
+      if(U.rects(this,game.player)) game.player.hurt(this.hitTime+10,rd,game);
       return;
     }
     if(this.ramCd>0) this.ramCd--;
     if(abs>120&&abs<600&&this.ramCd<=0&&Math.abs(this.y-game.player.y)<90){
-      this.ramTimer=this.ramDuration; this.ramCd=220; this.facing=dir;
-      this.alertText='ТАРАН ИСТОРИИ!'; this.alertTimer=90;
+      this.ramWindup=34; this.ramCd=260; this.ramDir=dir; this.facing=dir;
+      this.alertText='ТАРАН ИСТОРИИ!'; this.alertTimer=110;
       this.rememberPlayer(game.player,150);
-      game.toast('Ленин идёт тараном. Придётся отходить.');
+      game.toast('Ленин отводит плечо для тарана — отходи!');
     }
   }
 
@@ -862,6 +895,28 @@ KP.Enemy = class Enemy extends KP.Entity {
       ctx.lineTo(this.x+this.facing*640+this.w/2, this.y+this.h/2);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Телеграф тарана Ленина (вынд-ап) — растущая красная стрела в сторону удара
+    if(this.kind==='lenin'&&this.ramWindup>0){
+      const t=1-this.ramWindup/34;
+      ctx.save();
+      ctx.globalAlpha=0.45+0.4*Math.sin(Date.now()/45);
+      ctx.strokeStyle='#ff2020'; ctx.lineWidth=4;
+      const hx=this.x+this.w/2+this.facing*(24+t*100);
+      ctx.beginPath(); ctx.moveTo(this.x+this.w/2,this.y+14); ctx.lineTo(hx,this.y+14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(hx,this.y+14); ctx.lineTo(hx-this.facing*12,this.y+8); ctx.lineTo(hx-this.facing*12,this.y+20); ctx.closePath();
+      ctx.fillStyle='#ff2020'; ctx.fill();
+      ctx.restore();
+    }
+    // Телеграф выстрела босса — кольцо-зарядка прямо перед залпом
+    const cfgBoss=KP.Balance.enemies[this.kind]&&KP.Balance.enemies[this.kind].role==='boss';
+    if(cfgBoss&&this.shoot&&this.alive&&this.shootCd>0&&this.shootCd<=10){
+      ctx.save();
+      ctx.globalAlpha=0.5*(1-this.shootCd/10);
+      ctx.strokeStyle='#ffae00'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(this.x+this.w/2,this.y+26,this.shootCd*2.2+4,0,Math.PI*2); ctx.stroke();
       ctx.restore();
     }
 

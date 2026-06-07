@@ -2,42 +2,34 @@
 window.KP = window.KP || {};
 KP.Balance = {
   player:{
-    maxTime:140,
-    baseTimeDecay:0,
-    combatDecayBonus:0,
+    maxTime:140,            // здоровье героя (исторически называлось «время», см. docs)
     speed:.32,
     runSpeed:1.95,
     jump:-8.4,
-    turboDuration:300,
+    turboDuration:300,      // режим «Турбо» (клавиша C): единственный, что тратит здоровье
     turboCooldown:300,
     turboSpeed:1.55,
     turboDamage:1.38,
-    turboTimeCostPerFrame:.09,
+    turboHealthPerFrame:.12, // сколько здоровья жрёт турбо за кадр
     weakSpeed:.52,
     weakDamage:.68,
     timeStopDuration:300,
-    timeStopCost:18,
-    timeStopDrainPerFrame:.038,
-    drainRange:160,
-    drainGainPerFrame:.26,
-    drainEnemyDamagePerFrame:.24,
+    timeStopCooldown:420,   // стоп-время теперь без затрат здоровья, ограничено откатом
     gasTickFrames:18,
     gasWarningFrames:170,
     hitStunHits:5,
     hitStunDuration:120,
     hitStunResetFrames:240,
     healPickupAmount:22,
-    dodge:{ cost:8, duration:14, cooldown:58, speed:10.5, hitDmg:18, knock:10 },
+    dodge:{ cost:0, duration:14, cooldown:58, speed:10.5, hitDmg:18, knock:10 }, // перекат бесплатный, ограничен откатом
     combo:{ window:130, thresholds:[1,4,8,14], multipliers:[1,1.5,2.2,3.5] }
   },
-  featureFlags:{
-    drain:false,
-    turbo:false
-  },
+  // Способности открываются по входу в биом: abilityUnlocks[levelIndex].
+  // Биом 0 (Лес) — стартовый, без новой способности.
   abilityUnlocks:[
-    {id:'drain',        name:'Выкачивание времени', desc:'удерживай E/У рядом с врагом'},
+    null,
     {id:'doubleJump',   name:'Двойной прыжок', desc:'второй прыжок в воздухе'},
-    {id:'turbo',        name:'Турбо', desc:'5 секунд быстрее и сильнее, потом слабость'},
+    {id:'turbo',        name:'Турбо', desc:'C/С: 5 секунд быстрее и сильнее, но тратит здоровье; потом слабость'},
     {id:'timeStop',     name:'Остановка времени', desc:'F/А замораживает врагов на 5 секунд'},
     {id:'meleeMastery', name:'Мастер шашки', desc:'шашка сильнее и отталкивает дальше'},
     {id:'finalResolve', name:'Финальная решимость', desc:'урон по боссам выше, перекат быстрее'}

@@ -5,7 +5,6 @@ KP.Player = class Player extends KP.Entity {
 
   reset(){
     const b=KP.Balance.player;
-    const features=KP.Balance.featureFlags||{};
     const ammoBag={}, maxAmmoBag={};
     for(const [id,a] of Object.entries(KP.Balance.ammoTypes)){
       ammoBag[id]=a.start;
@@ -25,12 +24,13 @@ KP.Player = class Player extends KP.Entity {
       enemyHitChain:0,enemyHitChainTimer:0,stunTimer:0,
       gasTickCd:0,gasWarnTimer:0,
       dodgeTimer:0,dodgeCd:0,dodgeVx:0,
-      abilities:{drain:!!features.drain,doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
+      wasGrounded:false,landTimer:0,
+      abilities:{doubleJump:false,turbo:false,timeStop:false,meleeMastery:false,finalResolve:false}
     });
   }
 
   update(game){
-    const input=game.input, b=KP.Balance.player, features=KP.Balance.featureFlags||{};
+    const input=game.input, b=KP.Balance.player;
     if(this.invuln>0) this.invuln--;
     if(this.attackCd>0) this.attackCd--;
     if(this.attackFlash>0) this.attackFlash--;
@@ -38,33 +38,30 @@ KP.Player = class Player extends KP.Entity {
     if(this.dropTimer>0) this.dropTimer--;
     if(this.dodgeCd>0) this.dodgeCd--;
     if(this.stunTimer>0) this.stunTimer--;
+    if(this.landTimer>0) this.landTimer--;
     if(this.enemyHitChainTimer>0) this.enemyHitChainTimer--;
     else if(this.enemyHitChain>0) this.enemyHitChain=0;
     if(this.gasTickCd>0) this.gasTickCd--;
     if(this.gasWarnTimer>0) this.gasWarnTimer--;
 
-    if(features.turbo){
-      if(this.turbo>0){
-        this.turbo--;
-        this.time-=b.turboTimeCostPerFrame;
-        if(this.turbo<=0){
-          this.weak=b.turboCooldown;
-          game.toast('Откат турбо: Феликс временно выжат.');
-        }
-      } else if(this.turboCd>0){
-        this.turboCd--;
+    // Турбо (клавиша C/С): единственный режим, который тратит здоровье.
+    if(this.turbo>0){
+      this.turbo--;
+      this.time-=b.turboHealthPerFrame;
+      if(this.time<=0){ this.time=0; this.dead=true; }
+      if(this.turbo<=0){
+        this.weak=b.turboCooldown;
+        game.toast('Откат турбо: Феликс временно выжат.');
       }
-      if(this.weak>0) this.weak--;
-    } else {
-      this.turbo=0;
-      this.turboCd=0;
-      this.weak=0;
+    } else if(this.turboCd>0){
+      this.turboCd--;
     }
-    if(game.timeStopFrames>0) this.time-=b.timeStopDrainPerFrame;
+    if(this.weak>0) this.weak--;
 
     const stunned=this.stunTimer>0;
     this.runHeld=!stunned&&input.isDown('run')&&(input.isDown('left')||input.isDown('right'));
 
+    if(!stunned&&this.abilities.turbo&&input.wasPressed('turbo')) this.tryTurbo(game);
     if(!stunned&&input.wasPressed('timeStop')) this.tryTimeStop(game);
 
     if(!stunned&&input.wasPressed('dodge')){
@@ -125,7 +122,14 @@ KP.Player = class Player extends KP.Entity {
     this.vx*=(stunned&&this.grounded)?0.76:0.84;
     this.vx=KP.Utils.clamp(this.vx,-7.2*speedMul,7.2*speedMul);
     this.vy+=game.gravity;
+    const impactVy=this.vy;
     game.world.collide(this);
+    if(this.grounded&&!this.wasGrounded&&impactVy>5.5){
+      this.landTimer=9; // squash-and-stretch при приземлении
+      game.burst(this.x+this.w/2,this.y+this.h,'#b9b2a2',Math.min(14,4+Math.round(impactVy)));
+      if(impactVy>9) game.shake(5,3);
+    }
+    this.wasGrounded=this.grounded;
     if(this.grounded){
       this.jumpsLeft=maxJumps;
       this.runHeld=!stunned&&input.isDown('run')&&(input.isDown('left')||input.isDown('right'));
@@ -140,8 +144,7 @@ KP.Player = class Player extends KP.Entity {
     else if(Math.abs(this.vx)>1.25) this.pose='run';
     else this.pose='stand';
 
-    if(features.drain) this.drainNearbyEnemyTime(game);
-    else this.draining=false;
+    this.draining=false;
 
     if(this.time<=0){ this.time=0; this.dead=true; }
   }
@@ -214,32 +217,25 @@ KP.Player = class Player extends KP.Entity {
     const b=KP.Balance.player;
     if(!this.abilities.timeStop){ game.toast('Остановка времени ещё не открыта.'); return; }
     if(game.timeStopFrames>0) return;
-    if(this.time<b.timeStopCost+12){ game.toast('Мало времени для остановки времени.'); return; }
-    this.time-=b.timeStopCost;
+    if(this.timeStopCd>0){ game.toast(`Остановка времени перезаряжается: ${Math.ceil(this.timeStopCd/60)}с.`); return; }
+    this.timeStopCd=b.timeStopCooldown;
     game.timeStopFrames=b.timeStopDuration;
     game.audio.play('timeStop',.96);
     game.toast('Время остановлено на 5 секунд.');
     game.burst(this.x+this.w/2,this.y+this.h/2,'#65e8ff',40);
   }
 
-  drainNearbyEnemyTime(game){
+  tryTurbo(game){
     const b=KP.Balance.player;
-    const features=KP.Balance.featureFlags||{};
-    this.draining=false;
-    if(!features.drain||!this.abilities.drain) return;
-    if(!game.input.isDown('interact')) return;
-    let drained=false;
-    for(const e of game.enemies){
-      if(!e.alive) continue;
-      if(KP.Utils.near(this,e,b.drainRange,105)){
-        e.drainTime(game);
-        if(!e.alive) game.onEnemyHit(e);
-        this.time=KP.Utils.clamp(this.time+b.drainGainPerFrame,0,this.maxTime);
-        drained=true;
-        this.draining=true;
-      }
-    }
-    if(drained&&Math.random()<.22) game.burst(this.x+this.w/2,this.y+this.h/2,'#65e8ff',2);
+    if(this.turbo>0) return;
+    if(this.weak>0){ game.toast('Феликс ещё не отошёл от прошлого турбо.'); return; }
+    if(this.turboCd>0){ game.toast(`Турбо перезаряжается: ${Math.ceil(this.turboCd/60)}с.`); return; }
+    if(this.time<=20){ game.toast('Мало здоровья для турбо.'); return; }
+    this.turbo=b.turboDuration;
+    this.turboCd=b.turboCooldown;
+    game.audio.play('timeStop',1.3,.6);
+    game.toast('ТУРБО! Быстрее и сильнее — но жжёт здоровье.');
+    game.burst(this.x+this.w/2,this.y+this.h/2,'#ff8a1c',26);
   }
 
   ammoForCurrentWeapon(){
@@ -382,9 +378,7 @@ KP.Player = class Player extends KP.Entity {
   }
 
   unlockAbility(id,game){
-    const features=KP.Balance.featureFlags||{};
-    if((id==='drain'&&!features.drain)||(id==='turbo'&&!features.turbo)) return;
-    if(!id||this.abilities[id]) return;
+    if(!id||this.abilities[id]===undefined||this.abilities[id]) return;
     this.abilities[id]=true;
     const meta=(KP.Balance.abilityUnlocks||[]).find(a=>a.id===id);
     if(game) game.toast('Открыта способность: '+(meta?meta.name:id)+'. '+(meta?meta.desc:''));

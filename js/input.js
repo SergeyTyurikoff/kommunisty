@@ -32,7 +32,7 @@ KP.Input = class Input {
       inventory: ['KeyI','i','ш'],
       restart:   ['KeyR','r','к'],
       run:       ['ShiftLeft','ShiftRight','Shift'],
-      turbo:     ['ShiftLeft','ShiftRight','Shift'],
+      turbo:     ['KeyC','c','с'],
       timeStop:  ['KeyF','f','а'],
       attack:    ['Mouse0','KeyJ','j','о'],
       dodge:     ['KeyZ','z','я'],
